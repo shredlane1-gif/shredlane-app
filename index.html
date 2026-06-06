@@ -214,6 +214,34 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .rmk{font-size:9px;color:var(--gry2);}
 .save-btn{width:100%;padding:15px;border-radius:12px;font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;background:var(--grn);color:#000;border:none;cursor:pointer;box-shadow:var(--grn-glow);transition:all .18s;margin-top:4px;}
 .save-btn:active{transform:scale(.97);}
+/* DATE PICKER */
+.date-picker-wrap{background:var(--dark);border:1px solid var(--bdr);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+.dp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.dp-label{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--gry);}
+.dp-date-display{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--wht);font-style:italic;}
+.dp-today-btn{background:var(--grn-dim);border:1px solid rgba(126,224,0,.25);color:var(--grn);font-family:'Barlow',sans-serif;font-size:11px;font-weight:700;padding:5px 12px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+.dp-today-btn:active{transform:scale(.96);}
+.dp-native{width:100%;margin-top:10px;padding:12px 14px;background:var(--dark2);border:1.5px solid var(--bdr2);border-radius:10px;font-family:'Barlow',sans-serif;font-size:15px;color:var(--wht);-webkit-appearance:none;appearance:none;color-scheme:dark;}
+.dp-native:focus{outline:none;border-color:var(--grn);}
+.dp-past-note{font-size:11px;color:var(--amb);margin-top:8px;display:none;font-weight:500;}
+.dp-calendar{display:none;margin-top:12px;}
+.dp-calendar.open{display:block;}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.cal-nav{background:var(--dark3);border:none;color:var(--txt);font-size:18px;width:32px;height:32px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.cal-nav:active{transform:scale(.9);}
+.cal-month{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;font-style:italic;color:var(--wht);}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+.cal-day-hdr{font-size:9px;font-weight:800;color:var(--gry2);text-align:center;padding:4px 0;text-transform:uppercase;letter-spacing:.05em;}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .12s;color:var(--txt);}
+.cal-day:hover{background:var(--dark3);}
+.cal-day.today{border:1.5px solid var(--grn);color:var(--grn);}
+.cal-day.selected{background:var(--grn);color:#000;font-weight:800;}
+.cal-day.has-entry{position:relative;}.cal-day.has-entry::after{content:'';position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--grn);opacity:.7;}
+.cal-day.has-entry.selected::after{background:#000;}
+.cal-day.future{color:var(--gry2);cursor:not-allowed;opacity:.35;}
+.cal-day.empty{cursor:default;}
+.cal-toggle-btn{width:100%;padding:10px;background:var(--dark2);border:1px solid var(--bdr2);border-radius:8px;color:var(--txt);font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;transition:all .15s;}
+.cal-toggle-btn:hover{border-color:var(--grn);color:var(--grn);}
 
 /* HISTORY TABLE */
 .htbl{width:100%;border-collapse:collapse;font-size:12px;}
@@ -468,22 +496,44 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- CHECK-IN -->
   <div class="scr" id="scr-checkin">
     <div class="scr-ttl">DAILY CHECK-IN</div>
-    <div class="scr-sub" id="ciDate">Today</div>
+    <div class="scr-sub">Log your metrics — select today or a past date</div>
+
+    <!-- DATE PICKER -->
+    <div class="date-picker-wrap">
+      <div class="dp-row">
+        <div>
+          <div class="dp-label">Logging for</div>
+          <div class="dp-date-display" id="dpDisplay">Today</div>
+        </div>
+        <button class="dp-today-btn" onclick="setToday()">← Today</button>
+      </div>
+      <div class="dp-past-note" id="dpPastNote">⚠️ Logging for a past date</div>
+      <button class="cal-toggle-btn" id="calToggleBtn" onclick="toggleCal()">📅 Pick a different date</button>
+      <div class="dp-calendar" id="dpCalendar">
+        <div class="cal-header">
+          <button class="cal-nav" onclick="calNav(-1)">‹</button>
+          <div class="cal-month" id="calMonthLbl"></div>
+          <button class="cal-nav" onclick="calNav(1)">›</button>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-lbl">Body Metrics</div>
       <div class="ci-row" style="margin-bottom:16px">
         <div><div class="ci-lbl">Weight <span class="ci-lv" id="ciWtL">— kg</span></div><input class="ci-in" type="number" id="ciWt" placeholder="e.g. 82.5" step="0.1" inputmode="decimal" oninput="document.getElementById('ciWtL').textContent=this.value?this.value+' kg':'— kg'"></div>
         <div><div class="ci-lbl">Waist <span class="ci-lv" id="ciWaL">— in</span></div><input class="ci-in" type="number" id="ciWa" placeholder="e.g. 34.5" step="0.5" inputmode="decimal" oninput="document.getElementById('ciWaL').textContent=this.value?this.value+' in':'— in'"></div>
       </div>
-      <div class="ci-grp"><div class="ci-lbl">Steps today <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
+      <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
     </div>
     <div class="card">
       <div class="card-lbl">Sleep & Hunger</div>
-      <div class="ci-grp"><div class="ci-lbl">Sleep last night <span class="ci-lv" id="ciSlL">7.0 hrs</span></div><input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'"><div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div></div>
+      <div class="ci-grp"><div class="ci-lbl">Sleep <span class="ci-lv" id="ciSlL">7.0 hrs</span></div><input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'"><div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div></div>
       <div class="ci-grp" style="margin-bottom:0"><div class="ci-lbl">Hunger level <span class="ci-lv" id="ciHuL" style="color:var(--grn)">5</span></div><input type="range" id="hungR" min="1" max="10" step="1" value="5" oninput="onHu(this.value)"><div class="rng-mks"><span class="rmk">1 Full</span><span class="rmk">5 Moderate</span><span class="rmk">10 Starving</span></div></div>
     </div>
     <div class="card"><div class="card-lbl">Notes (optional)</div><textarea class="ci-in" id="ciNotes" rows="3" placeholder="How did today feel?" style="resize:vertical;font-family:'Barlow',sans-serif;font-size:14px;line-height:1.5"></textarea></div>
-    <button class="save-btn" onclick="saveCI()">🔥 Save Check-in</button>
+    <button class="save-btn" id="saveCIBtn" onclick="saveCI()">🔥 Save Check-in</button>
   </div>
 
   <!-- HISTORY -->
@@ -658,10 +708,122 @@ function goTab(name,btn){
 // ═══════════════════════════════════════
 function myCI(){return CU?(gDB().checkins[CU.email]||[]):[]}
 
+// ── DATE PICKER STATE ──
+let selectedDate = today(); // YYYY-MM-DD
+let calViewYear = new Date().getFullYear();
+let calViewMonth = new Date().getMonth();
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+function setToday(){
+  selectedDate = today();
+  updateDateUI();
+  const cal = document.getElementById('dpCalendar');
+  cal.classList.remove('open');
+  document.getElementById('calToggleBtn').textContent = '📅 Pick a different date';
+}
+
+function toggleCal(){
+  const cal = document.getElementById('dpCalendar');
+  const isOpen = cal.classList.contains('open');
+  cal.classList.toggle('open');
+  document.getElementById('calToggleBtn').textContent = isOpen ? '📅 Pick a different date' : '✕ Close calendar';
+  if(!isOpen){
+    const d = new Date(selectedDate+'T00:00:00');
+    calViewYear = d.getFullYear();
+    calViewMonth = d.getMonth();
+    renderCal();
+  }
+}
+
+function calNav(dir){
+  calViewMonth += dir;
+  if(calViewMonth > 11){calViewMonth=0;calViewYear++;}
+  if(calViewMonth < 0){calViewMonth=11;calViewYear--;}
+  renderCal();
+}
+
+function renderCal(){
+  const lbl = document.getElementById('calMonthLbl');
+  const grid = document.getElementById('calGrid');
+  if(!lbl||!grid) return;
+  lbl.textContent = MONTHS[calViewMonth] + ' ' + calViewYear;
+  const todayStr = today();
+  const entries = new Set((myCI()||[]).map(c=>c.date));
+  const firstDay = new Date(calViewYear, calViewMonth, 1).getDay();
+  const daysInMonth = new Date(calViewYear, calViewMonth+1, 0).getDate();
+  let html = DAYS.map(d=>`<div class="cal-day-hdr">${d}</div>`).join('');
+  // Empty cells before first day
+  for(let i=0;i<firstDay;i++) html += '<div class="cal-day empty"></div>';
+  for(let day=1;day<=daysInMonth;day++){
+    const ds = calViewYear+'-'+String(calViewMonth+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    const isFuture = ds > todayStr;
+    const isToday = ds === todayStr;
+    const isSel = ds === selectedDate;
+    const hasEntry = entries.has(ds);
+    let cls = 'cal-day';
+    if(isFuture) cls += ' future';
+    if(isToday) cls += ' today';
+    if(isSel) cls += ' selected';
+    if(hasEntry) cls += ' has-entry';
+    const click = isFuture ? '' : `onclick="pickDate('${ds}')"`;
+    html += `<div class="${cls}" ${click}>${day}</div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function pickDate(ds){
+  selectedDate = ds;
+  updateDateUI();
+  renderCal();
+  // Pre-fill if entry exists for this date
+  const ci = myCI();
+  const existing = ci.find(c=>c.date===ds);
+  if(existing){
+    if(existing.weight){document.getElementById('ciWt').value=existing.weight;document.getElementById('ciWtL').textContent=existing.weight+' kg';}
+    if(existing.waist){document.getElementById('ciWa').value=existing.waist;document.getElementById('ciWaL').textContent=existing.waist+' in';}
+    document.getElementById('ciSt').value=existing.steps||'';document.getElementById('ciStL').textContent=(existing.steps||0).toLocaleString();
+    document.getElementById('sleepR').value=existing.sleep||7;document.getElementById('ciSlL').textContent=(existing.sleep||7)+' hrs';
+    document.getElementById('hungR').value=existing.hunger||5;onHu(existing.hunger||5);
+    document.getElementById('ciNotes').value=existing.notes||'';
+    renderSpeedo(existing.steps||0);
+    toast('📋 Existing entry loaded — edit and save to update','a');
+  } else {
+    // Clear form for new past entry
+    document.getElementById('ciSt').value='';document.getElementById('ciStL').textContent='0';
+    document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
+    document.getElementById('hungR').value=5;onHu(5);
+    document.getElementById('ciNotes').value='';
+    renderSpeedo(0);
+  }
+  // Close calendar after short delay
+  setTimeout(()=>{
+    document.getElementById('dpCalendar').classList.remove('open');
+    document.getElementById('calToggleBtn').textContent = '📅 Pick a different date';
+  },400);
+}
+
+function updateDateUI(){
+  const d = new Date(selectedDate+'T00:00:00');
+  const todayStr = today();
+  const isPast = selectedDate < todayStr;
+  const isToday = selectedDate === todayStr;
+  const formatted = d.toLocaleDateString('en-KE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('dpDisplay').textContent = isToday ? 'Today — '+formatted : formatted;
+  document.getElementById('dpPastNote').style.display = isPast ? 'block' : 'none';
+  const btn = document.getElementById('saveCIBtn');
+  if(btn) btn.textContent = isPast ? '💾 Save Past Entry' : '🔥 Save Check-in';
+}
+
 function initCI(){
-  const d=new Date();
-  document.getElementById('ciDate').textContent=d.toLocaleDateString('en-KE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  selectedDate = today();
+  updateDateUI();
+  calViewYear = new Date().getFullYear();
+  calViewMonth = new Date().getMonth();
+  document.getElementById('dpCalendar').classList.remove('open');
+  document.getElementById('calToggleBtn').textContent = '📅 Pick a different date';
   const ci=myCI();
+  // Pre-fill last known weight/waist
   if(ci.length){const l=ci[ci.length-1];if(l.weight){document.getElementById('ciWt').value=l.weight;document.getElementById('ciWtL').textContent=l.weight+' kg';}if(l.waist){document.getElementById('ciWa').value=l.waist;document.getElementById('ciWaL').textContent=l.waist+' in';}}
   document.getElementById('ciSt').value='';document.getElementById('ciStL').textContent='0';
   document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
@@ -686,7 +848,7 @@ function saveCI(){
   if(!wa||isNaN(wa)){toast('Please enter your waist','r');return;}
   const d=gDB();
   if(!d.checkins[CU.email])d.checkins[CU.email]=[];
-  const t=today();
+  const t=selectedDate||today();
   const idx=d.checkins[CU.email].findIndex(c=>c.date===t);
   const entry={date:t,weight:wt,waist:wa,steps:st,sleep:sl,hunger:hu,notes:no};
   if(idx>=0)d.checkins[CU.email][idx]=entry;
@@ -976,8 +1138,8 @@ function toast(msg,type=''){
 // INIT
 onHu(5);renderSpeedo(0);
 const nd=new Date();
-if(document.getElementById('ciDate'))
-  document.getElementById('ciDate').textContent=nd.toLocaleDateString('en-KE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+// ciDate element replaced by dpDisplay — handled in initCI()
+
 </script>
 </body>
 </html>
