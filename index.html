@@ -277,6 +277,43 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .cml{font-size:9px;color:var(--gry);font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
 .approve-btn{background:var(--grn);color:#000;border:none;border-radius:6px;padding:6px 12px;font-family:'Barlow',sans-serif;font-size:11px;font-weight:700;cursor:pointer;margin-left:auto;}
 .reject-btn{background:var(--red);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-family:'Barlow',sans-serif;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px;}
+.habit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.habit-item{background:var(--dark2);border:1px solid var(--bdr2);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:.15s;-webkit-tap-highlight-color:transparent}
+.habit-item.on{border-color:var(--grn);background:var(--grn-dim)}
+.habit-icon{font-size:22px}
+.habit-lbl{font-size:11px;font-weight:700;color:var(--gry);text-align:center;line-height:1.3}
+.habit-item.on .habit-lbl{color:var(--grn)}
+.habit-badge{font-size:13px;font-weight:800;color:var(--gry)}
+.habit-item.on .habit-badge{color:var(--grn)}
+/* ── Compliance scale buttons ── */
+.comp-row{display:flex;gap:6px;margin-top:8px}
+.comp-btn{flex:1;padding:9px 4px;border:1px solid var(--bdr2);border-radius:8px;background:var(--dark2);color:var(--gry);font-family:'Barlow',sans-serif;font-size:11px;font-weight:700;cursor:pointer;text-align:center;transition:.15s;-webkit-tap-highlight-color:transparent;line-height:1.3}
+.comp-btn.sel-red{border-color:#EF4444;background:rgba(239,68,68,.15);color:#EF4444}
+.comp-btn.sel-amber{border-color:#F59E0B;background:rgba(245,158,11,.15);color:#F59E0B}
+.comp-btn.sel-grn{border-color:#7EE000;background:var(--grn-dim);color:#7EE000}
+/* ── Workout Yes/No ── */
+.workout-row{display:flex;gap:10px;margin-top:8px}
+.wkt-btn{flex:1;padding:12px;border:1px solid var(--bdr2);border-radius:10px;background:var(--dark2);font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;cursor:pointer;text-align:center;transition:.15s;-webkit-tap-highlight-color:transparent;letter-spacing:.5px;color:var(--wht)}
+.wkt-btn.sel-no{border-color:#EF4444;background:rgba(239,68,68,.15);color:#EF4444}
+.wkt-btn.sel-yes{border-color:#7EE000;background:var(--grn-dim);color:#7EE000}
+/* ── Sleep quality buttons ── */
+.sleep-qual-row{display:flex;gap:6px;margin-top:8px}
+.sq-btn{flex:1;padding:8px 4px;border:1px solid var(--bdr2);border-radius:8px;background:var(--dark2);color:var(--gry);font-family:'Barlow',sans-serif;font-size:11px;font-weight:700;cursor:pointer;text-align:center;transition:.15s;-webkit-tap-highlight-color:transparent;line-height:1.3}
+.sq-btn.sel-red{border-color:#EF4444;background:rgba(239,68,68,.15);color:#EF4444}
+.sq-btn.sel-amber{border-color:#F59E0B;background:rgba(245,158,11,.15);color:#F59E0B}
+.sq-btn.sel-grn{border-color:#7EE000;background:var(--grn-dim);color:#7EE000}
+/* ── Water counter ── */
+.water-wrap{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.water-glasses{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.water-glass{font-size:22px;opacity:.2;cursor:pointer;transition:.1s;-webkit-tap-highlight-color:transparent}
+.water-glass.full{opacity:1}
+.water-btns{display:flex;flex-direction:column;gap:6px;margin-left:12px}
+.water-btn{background:var(--dark2);border:1px solid var(--bdr2);border-radius:8px;width:36px;height:36px;font-size:18px;color:var(--wht);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.water-lbl{font-size:11px;color:var(--gry);margin-top:6px}
+/* ── History total-lost banner ── */
+.tl-banner{background:linear-gradient(135deg,#1a2a00,#0e1a00);border:1px solid rgba(126,224,0,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center}
+.tl-main{font-size:18px;font-weight:800;color:var(--grn);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px}
+.tl-sub{font-size:11px;color:var(--gry);margin-top:3px}
 
 /* TOAST */
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--dark2);color:var(--wht);border:1px solid var(--bdr2);padding:10px 20px;border-radius:28px;font-size:13px;font-weight:600;opacity:0;transition:all .3s;white-space:nowrap;z-index:9999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);}
@@ -539,10 +576,53 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     </div>
     <div class="card">
       <div class="card-lbl">Sleep & Hunger</div>
-      <div class="ci-grp"><div class="ci-lbl">Sleep <span class="ci-lv" id="ciSlL">7.0 hrs</span></div><input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'"><div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div></div>
+      <div class="ci-grp">
+        <div class="ci-lbl">Sleep hours <span class="ci-lv" id="ciSlL">7.0 hrs</span></div>
+        <input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'">
+        <div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div>
+        <div class="ci-lbl" style="margin-top:12px">Sleep quality</div>
+        <div class="sleep-qual-row">
+          <button class="sq-btn sel-red" id="sq0" onclick="setSleepQual(0)">😴<br>Poor</button>
+          <button class="sq-btn" id="sq1" onclick="setSleepQual(1)">😐<br>Fair</button>
+          <button class="sq-btn" id="sq2" onclick="setSleepQual(2)">🙂<br>Good</button>
+          <button class="sq-btn" id="sq3" onclick="setSleepQual(3)">😁<br>Great</button>
+        </div>
+      </div>
       <div class="ci-grp" style="margin-bottom:0"><div class="ci-lbl">Hunger level <span class="ci-lv" id="ciHuL" style="color:var(--grn)">5</span></div><input type="range" id="hungR" min="1" max="10" step="1" value="5" oninput="onHu(this.value)"><div class="rng-mks"><span class="rmk">1 Full</span><span class="rmk">5 Moderate</span><span class="rmk">10 Starving</span></div></div>
     </div>
     <div class="card"><div class="card-lbl">Notes (optional)</div><textarea class="ci-in" id="ciNotes" rows="3" placeholder="How did today feel?" style="resize:vertical;font-family:'Barlow',sans-serif;font-size:14px;line-height:1.5"></textarea></div>
+
+    <div class="card">
+      <div class="card-lbl">Habit Compliance</div>
+
+      <div class="ci-lbl" style="margin-bottom:4px">🥩 Protein target — how well did you hit it?</div>
+      <div class="comp-row">
+        <button class="comp-btn" id="pro0" onclick="setProtein(0)">🔴<br>0%<br><span style="font-size:9px;font-weight:400">Off plan</span></button>
+        <button class="comp-btn" id="pro25" onclick="setProtein(25)">🟡<br>25%<br><span style="font-size:9px;font-weight:400">Struggled</span></button>
+        <button class="comp-btn" id="pro50" onclick="setProtein(50)">🟡<br>50%<br><span style="font-size:9px;font-weight:400">Halfway</span></button>
+        <button class="comp-btn" id="pro75" onclick="setProtein(75)">🟢<br>75%<br><span style="font-size:9px;font-weight:400">Close</span></button>
+        <button class="comp-btn" id="pro100" onclick="setProtein(100)">🟢<br>100%<br><span style="font-size:9px;font-weight:400">On target</span></button>
+      </div>
+
+      <div class="ci-lbl" style="margin-top:14px;margin-bottom:4px">🏋️ Did you train today?</div>
+      <div class="workout-row">
+        <button class="wkt-btn" id="wktNo" onclick="setWorkout(false)">✗ NO</button>
+        <button class="wkt-btn" id="wktYes" onclick="setWorkout(true)">✓ YES</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-lbl">Water Intake <span class="ci-lv" id="ciWaterL">0 glasses</span></div>
+      <div class="water-wrap">
+        <div class="water-glasses" id="waterGlasses"></div>
+        <div class="water-btns">
+          <button class="water-btn" onclick="adjustWater(1)">+</button>
+          <button class="water-btn" onclick="adjustWater(-1)">−</button>
+        </div>
+      </div>
+      <div class="water-lbl">Target: 8 glasses/day · Tap a glass to set</div>
+    </div>
+
     <button class="save-btn" id="saveCIBtn" onclick="saveCI()">🔥 Save Check-in</button>
   </div>
 
@@ -550,10 +630,17 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <div class="scr" id="scr-history">
     <div class="scr-ttl">HISTORY</div>
     <div class="scr-sub">Your last 30 check-ins</div>
-    <button class="b-secondary" style="width:auto;padding:10px 16px;margin-bottom:12px" onclick="exportMyPDF()">📄 Download my records (PDF)</button>
+    <div class="tl-banner" id="tlBanner" style="display:none">
+      <div class="tl-main" id="tlMain"></div>
+      <div class="tl-sub" id="tlSub"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="exportMyPDF()">📄 Download Report Card (PDF)</button>
+      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="exportMyCSV()">⬇️ Export my data (CSV)</button>
+    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
-        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Sleep</th><th>Hung</th></tr></thead>
+        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Sleep</th><th>Hung</th><th>Pro</th><th>Wkt</th></tr></thead>
         <tbody id="histBody"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr></tbody></table>
       </div>
     </div>
@@ -896,6 +983,9 @@ function pickDate(ds){
     document.getElementById('sleepR').value=existing.sleep||7;document.getElementById('ciSlL').textContent=(existing.sleep||7)+' hrs';
     document.getElementById('hungR').value=existing.hunger||5;onHu(existing.hunger||5);
     document.getElementById('ciNotes').value=existing.notes||'';
+    proteinPct=existing.protein??null;workoutDone=existing.workout??null;sleepQual=existing.sleepQual??null;
+    renderHabits();
+    waterCount=existing.water||0;renderWater();
     renderSpeedo(existing.steps||0);
     toast('📋 Existing entry loaded — edit and save to update','a');
   } else {
@@ -904,6 +994,9 @@ function pickDate(ds){
     document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
     document.getElementById('hungR').value=5;onHu(5);
     document.getElementById('ciNotes').value='';
+    proteinPct=null;workoutDone=null;sleepQual=null;
+    setProtein(null);setWorkout(null);setSleepQual(null);
+    waterCount=0;renderWater();
     renderSpeedo(0);
   }
   // Close calendar after short delay
@@ -939,11 +1032,83 @@ function initCI(){
   document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
   document.getElementById('hungR').value=5;onHu(5);
   document.getElementById('ciNotes').value='';
+  proteinPct=null;workoutDone=null;sleepQual=null;
+  setProtein(null);setWorkout(null);setSleepQual(null);
+  waterCount=0;renderWater();
   renderSpeedo(0);
 }
 
 function onSt(v){const n=parseInt(v)||0;document.getElementById('ciStL').textContent=n.toLocaleString();renderSpeedo(n);}
 function onHu(v){v=parseInt(v);document.getElementById('ciHuL').textContent=v+' — '+(HU_LBL[v]||'');}
+
+// ── Protein compliance scale ──
+let proteinPct=null; // 0,25,50,75,100 or null
+function setProtein(val){
+  proteinPct=val;
+  [0,25,50,75,100].forEach(v=>{
+    const b=document.getElementById('pro'+v);
+    if(!b)return;
+    b.classList.remove('sel-red','sel-amber','sel-grn');
+    if(v===val){
+      if(v<=25)b.classList.add('sel-red');
+      else if(v<=75)b.classList.add('sel-amber');
+      else b.classList.add('sel-grn');
+    }
+  });
+}
+
+// ── Workout yes/no ──
+let workoutDone=null; // true/false/null
+function setWorkout(val){
+  workoutDone=val;
+  const no=document.getElementById('wktNo'),yes=document.getElementById('wktYes');
+  if(!no||!yes)return;
+  no.classList.remove('sel-no','sel-yes');
+  yes.classList.remove('sel-no','sel-yes');
+  if(val===false)no.classList.add('sel-no');
+  if(val===true)yes.classList.add('sel-yes');
+}
+
+// ── Sleep quality ──
+let sleepQual=null; // 0=Poor,1=Fair,2=Good,3=Great
+const SQ_LABELS=['Poor','Fair','Good','Great'];
+function setSleepQual(val){
+  sleepQual=val;
+  [0,1,2,3].forEach(v=>{
+    const b=document.getElementById('sq'+v);
+    if(!b)return;
+    b.classList.remove('sel-red','sel-amber','sel-grn');
+    if(v===val){
+      if(v<=0)b.classList.add('sel-red');
+      else if(v<=1)b.classList.add('sel-amber');
+      else b.classList.add('sel-grn');
+    }
+  });
+}
+
+function renderHabits(){
+  // Re-apply stored state to buttons
+  if(proteinPct!==null)setProtein(proteinPct);
+  if(workoutDone!==null)setWorkout(workoutDone);
+  if(sleepQual!==null)setSleepQual(sleepQual);
+}
+
+// ── Water counter ──
+let waterCount=0;
+function adjustWater(d){
+  waterCount=Math.max(0,Math.min(12,waterCount+d));
+  renderWater();
+}
+function setWater(n){waterCount=n;renderWater();}
+function renderWater(){
+  const el=document.getElementById('waterGlasses');
+  const lbl=document.getElementById('ciWaterL');
+  if(!el)return;
+  el.innerHTML=Array.from({length:8},(_,i)=>
+    `<span class="water-glass${i<waterCount?' full':''}" onclick="setWater(${i+1})">💧</span>`
+  ).join('');
+  if(lbl)lbl.textContent=waterCount+' glass'+(waterCount===1?'':'es')+(waterCount>=8?' ✓':'');
+}
 
 async function saveCI(){
   if(!CU)return;
@@ -959,7 +1124,7 @@ async function saveCI(){
   const list=(gDB().checkins[CU.email]||[]).slice();
   const t=selectedDate||today();
   const idx=list.findIndex(c=>c.date===t);
-  const entry={date:t,weight:wt,waist:wa,steps:st,sleep:sl,hunger:hu,notes:no};
+  const entry={date:t,weight:wt,waist:wa,steps:st,sleep:sl,hunger:hu,notes:no,protein:proteinPct,workout:workoutDone,sleepQual:sleepQual,water:waterCount};
   if(idx>=0)list[idx]=entry;
   else list.push(entry);
   try{
@@ -1167,15 +1332,52 @@ function calcStreak(ci){
 // HISTORY
 // ═══════════════════════════════════════
 function renderHistory(){
-  const ci=[...myCI()].reverse().slice(0,30);
+  const u=VIEWUSER||CU;
+  const ci=[...myCI()].sort((a,b)=>a.date.localeCompare(b.date));
+  // Total lost banner
+  const banner=document.getElementById('tlBanner');
+  const tlMain=document.getElementById('tlMain');
+  const tlSub=document.getElementById('tlSub');
+  if(banner&&ci.length>=1&&u){
+    const last=ci[ci.length-1];
+    const baseW=u.baseWeight, baseWa=u.baseWaist;
+    const wLost=baseW?(baseW-last.weight):null;
+    const waLost=baseWa?(baseWa-last.waist):null;
+    if(wLost!==null||waLost!==null){
+      banner.style.display='block';
+      const parts=[];
+      if(wLost!==null){
+        const clr=wLost>0?'#7EE000':'#FF3B30';
+        parts.push(`<span style="color:${clr}">${wLost>0?'▼':'▲'} ${Math.abs(wLost).toFixed(1)} kg</span>`);
+      }
+      if(waLost!==null){
+        const clr=waLost>0?'#7EE000':'#FF3B30';
+        parts.push(`<span style="color:${clr}">${waLost>0?'▼':'▲'} ${Math.abs(waLost).toFixed(1)} in waist</span>`);
+      }
+      tlMain.innerHTML=(wLost>0||waLost>0)?'🔥 '+parts.join('  ·  ')+' since you started!':parts.join('  ·  ')+' from baseline';
+      tlSub.textContent=ci.length+' check-in'+(ci.length===1?'':'s')+' logged · streak: '+calcStreak(ci)+' days';
+    } else banner.style.display='none';
+  } else if(banner) banner.style.display='none';
+
+  const recent=[...ci].reverse().slice(0,30);
   const tb=document.getElementById('histBody');
-  if(!ci.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
-  tb.innerHTML=ci.map(c=>`<tr>
-    <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
-    <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
-    <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
-    <td>${c.sleep??'—'}</td><td>${c.hunger??'—'}</td>
-  </tr>`).join('');
+  if(!recent.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
+  tb.innerHTML=recent.map(c=>{
+    const proClr=c.protein>=100?'var(--grn)':c.protein>=50?'#F59E0B':'var(--red)';
+    const proTxt=c.protein!=null?c.protein+'%':'—';
+    const wktClr=c.workout===true?'var(--grn)':c.workout===false?'var(--red)':'var(--gry)';
+    const wktTxt=c.workout===true?'✓':c.workout===false?'✗':'—';
+    const sqLabels=['😴','😐','🙂','😁'];
+    const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
+    return `<tr>
+      <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
+      <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
+      <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
+      <td>${c.sleep??'—'} ${sqTxt}</td><td>${c.hunger??'—'}</td>
+      <td style="color:${proClr}">${proTxt}</td>
+      <td style="color:${wktClr}">${wktTxt}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════
@@ -1292,15 +1494,16 @@ function csvEscape(v){
 function exportAllCSV(){
   if(!CU||CU.role!=='admin')return;
   const d=gDB();
-  const rows=[['Name','Email','Goal','Status','Joined','Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Hunger (1-10)','Notes']];
+  const rows=[['Name','Email','Goal','Status','Joined','Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
   const members=Object.values(d.users).filter(u=>u.role!=='admin');
+  const sqL=['Poor','Fair','Good','Great'];
   members.forEach(u=>{
     const ci=d.checkins[u.email]||[];
     if(!ci.length){
-      rows.push([u.name,u.email,u.goal,u.status,u.joined,'','','','','','','']);
+      rows.push([u.name,u.email,u.goal,u.status,u.joined,'','','','','','','','','','','']);
     }else{
       ci.forEach(c=>{
-        rows.push([u.name,u.email,u.goal,u.status,u.joined,c.date,c.weight,c.waist,c.steps,c.sleep,c.hunger,c.notes||'']);
+        rows.push([u.name,u.email,u.goal,u.status,u.joined,c.date,c.weight,c.waist,c.steps,c.sleep,c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger,c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']);
       });
     }
   });
@@ -1309,209 +1512,494 @@ function exportAllCSV(){
   toast('⬇️ CSV downloaded','g');
 }
 
-function weeklyAverages(ci,metric){
-  if(!ci.length)return [];
-  const sorted=[...ci].sort((a,b)=>a.date.localeCompare(b.date));
-  const startDate=new Date(sorted[0].date+'T00:00:00');
-  const weeks={};
-  sorted.forEach(c=>{
-    const dayN=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
-    const wk='Week '+(dayN+1);
-    if(!weeks[wk])weeks[wk]=[];
-    const v=c[metric];
-    if(v)weeks[wk].push(v);
-  });
-  return Object.entries(weeks).filter(([,arr])=>arr.length).map(([wk,arr])=>({
-    week:wk, avg: arr.reduce((s,v)=>s+v,0)/arr.length
-  }));
+function exportMyCSV(){
+  if(!CU)return;
+  const u=VIEWUSER||CU;
+  const ci=[...(gDB().checkins[u.email]||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
+  const sqL=['Poor','Fair','Good','Great'];
+  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
+  const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
+  downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
+  toast('⬇️ CSV exported','g');
 }
 
 function exportMyPDF(){
   if(!CU)return;
-  const ci=[...myCI()].sort((a,b)=>a.date.localeCompare(b.date));
+  const u=VIEWUSER||CU;
+  const ci=[...(gDB().checkins[u.email]||[])].sort((a,b)=>a.date.localeCompare(b.date));
   const { jsPDF } = window.jspdf;
   const doc=new jsPDF();
-  const greenRGB=[126,224,0];
 
-  // ── Header ──
+  // ── Helpers ──
+  const avg=(arr)=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
+  const pct=(arr,key)=>{
+    const vals=arr.filter(c=>c[key]!=null);
+    if(!vals.length)return null;
+    // protein is a number 0-100, workout is boolean
+    if(typeof vals[0][key]==='number') return Math.round(vals.reduce((s,c)=>s+c[key],0)/vals.length);
+    return Math.round(vals.filter(c=>c[key]===true).length/vals.length*100);
+  };
+  const fmtAvg=(v,dp=1)=>v!=null?v.toFixed(dp):'—';
+  const chg=(from,to)=>to!=null&&from!=null?(to-from):null;
+  const chgStr=(v,unit)=>(v>0?'+':'')+v.toFixed(1)+' '+unit;
+  const sqL=['Poor','Fair','Good','Great'];
+
+  // ── Traffic light scoring ──
+  // Returns [r,g,b] and label
+  function trafficLight(score){ // score 0-100
+    if(score==null)return {rgb:[150,150,150],label:'No data',emoji:'⚪'};
+    if(score>=75)return {rgb:[0,160,0],label:'On Track',emoji:'🟢'};
+    if(score>=50)return {rgb:[200,140,0],label:'Needs Attention',emoji:'🟡'};
+    return {rgb:[200,40,40],label:'Off Track',emoji:'🔴'};
+  }
+
+  // Score each dimension 0-100
+  function scoreBodyComp(){
+    if(!u.baseWeight||!u.baseWaist||!last)return null;
+    const wPct=Math.max(0,Math.min(100,((u.baseWeight-last.weight)/u.baseWeight)*500+50));
+    const waPct=Math.max(0,Math.min(100,((u.baseWaist-last.waist)/u.baseWaist)*500+50));
+    return Math.round((wPct+waPct)/2);
+  }
+  function scoreAdherence(){
+    const proAvg=avg(ci.filter(c=>c.protein!=null).map(c=>c.protein));
+    const wktPct=pct(ci,'workout');
+    const vals=[proAvg,wktPct].filter(v=>v!=null);
+    return vals.length?Math.round(vals.reduce((s,v)=>s+v,0)/vals.length):null;
+  }
+  function scoreEnergy(){
+    const slAvg=avg(ci.map(c=>c.sleep).filter(Boolean));
+    if(slAvg==null)return null;
+    // 7-9 hrs = 100, scale down either side
+    return Math.round(Math.max(0,Math.min(100,100-Math.abs(slAvg-8)*20)));
+  }
+  function scoreHunger(){
+    const huAvg=avg(ci.map(c=>c.hunger).filter(Boolean));
+    if(huAvg==null)return null;
+    // 3-6 is good range, scale
+    return Math.round(Math.max(0,Math.min(100,100-Math.abs(huAvg-4.5)*15)));
+  }
+  function scoreActivity(){
+    if(!ci.length)return null;
+    return Math.round(ci.filter(c=>(c.steps||0)>=10000).length/ci.length*100);
+  }
+  function overallScore(){
+    const scores=[scoreBodyComp(),scoreAdherence(),scoreEnergy(),scoreHunger(),scoreActivity()].filter(v=>v!=null);
+    return scores.length?Math.round(scores.reduce((s,v)=>s+v,0)/scores.length):null;
+  }
+
+  // Build weekly buckets
+  const sorted=ci;
+  function buildWeeks(entries){
+    if(!entries.length)return [];
+    const startDate=new Date(entries[0].date+'T00:00:00');
+    const map={};
+    entries.forEach(c=>{
+      const wn=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
+      if(!map[wn])map[wn]={n:wn,entries:[],start:c.date,end:c.date};
+      map[wn].entries.push(c);
+      if(c.date<map[wn].start)map[wn].start=c.date;
+      if(c.date>map[wn].end)map[wn].end=c.date;
+    });
+    return Object.values(map).sort((a,b)=>a.n-b.n);
+  }
+  const weeks=buildWeeks(sorted);
+
+  // ── Overall stats ──
+  const last=sorted[sorted.length-1];
+  const baseW=u.baseWeight, baseWa=u.baseWaist;
+  const wLost=baseW&&last?chg(baseW,last.weight):null;
+  const waLost=baseWa&&last?chg(baseWa,last.waist):null;
+  const overallAvgW=avg(sorted.map(c=>c.weight).filter(Boolean));
+  const overallAvgWa=avg(sorted.map(c=>c.waist).filter(Boolean));
+  const overallAvgSt=avg(sorted.map(c=>c.steps).filter(Boolean));
+  const overallAvgSl=avg(sorted.map(c=>c.sleep).filter(Boolean));
+  const overallAvgHu=avg(sorted.map(c=>c.hunger).filter(Boolean));
+  const overallAvgWt=avg(sorted.map(c=>c.water).filter(v=>v!=null));
+  const overallProPct=pct(sorted.filter(c=>c.protein!=null).map(c=>({protein:c.protein})),'protein');
+  const overallWktPct=pct(sorted,'workout');
+  const stepsHits=sorted.filter(c=>(c.steps||0)>=10000).length;
+
+  // ── Watermark helper — call on every page ──
+  function drawWatermark(){
+    doc.saveGraphicsState();
+    doc.setGState(new doc.GState({opacity:0.06}));
+    doc.setTextColor(80,80,80);
+    doc.setFontSize(52);doc.setFont(undefined,'bold');
+    doc.text('SHREDLANE',105,160,{align:'center',angle:45});
+    doc.restoreGraphicsState();
+    doc.setTextColor(20,20,20);
+    doc.setFont(undefined,'normal');
+  }
+
+  // ── Metric definitions footer block ──
+  const DEFS=[
+    {label:'Body Composition',desc:'Weight & waist trend vs your baseline starting point.'},
+    {label:'Adherence',desc:'Protein target % + workout compliance combined daily average.'},
+    {label:'Energy Proxy',desc:'Sleep hours average — 7–9 hrs is the optimal target range.'},
+    {label:'Hunger/Cravings',desc:'Hunger score trend — lower = better controlled appetite (scale 1–10).'},
+    {label:'Activity',desc:'Steps compliance — days where 10,000 step target was reached.'},
+    {label:'Water',desc:'Daily glasses of water logged. Target is 8 glasses per day.'},
+    {label:'Sleep Quality',desc:'Self-rated quality: Poor / Fair / Good / Great alongside hours slept.'},
+  ];
+
+  function drawDefinitions(yStart){
+    if(yStart>230){doc.addPage();drawWatermark();yStart=20;}
+    doc.setFillColor(245,245,245);
+    doc.rect(14,yStart,182,4+DEFS.length*10,'F');
+    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(80,80,80);
+    doc.text('METRIC DEFINITIONS',17,yStart+8);
+    let dy=yStart+14;
+    DEFS.forEach(d=>{
+      doc.setFont(undefined,'bold');doc.setTextColor(60,60,60);
+      doc.text(d.label+':',17,dy);
+      doc.setFont(undefined,'normal');doc.setTextColor(110,110,110);
+      doc.text(d.desc,52,dy);
+      dy+=8;
+    });
+    return dy+4;
+  }
+
+  // ── Draw traffic light dot ──
+  function drawDot(x,y,rgb,r=3){
+    doc.setFillColor(...rgb);doc.circle(x,y,r,'F');
+  }
+
+  // ═══════════════════════════════════════
+  // PAGE 1: COMPACT SUMMARY + STACKED CHART
+  // ═══════════════════════════════════════
+  // Header bar
   doc.setFillColor(14,14,14);
   doc.rect(0,0,210,28,'F');
-  doc.setTextColor(...greenRGB);
-  doc.setFontSize(20);
-  doc.setFont(undefined,'bold');
+  doc.setTextColor(126,224,0);
+  doc.setFontSize(20);doc.setFont(undefined,'bold');
   doc.text('SHREDLANE',14,13);
-  doc.setFontSize(10);
-  doc.setTextColor(255,255,255);
-  doc.setFont(undefined,'normal');
-  doc.text('Track. Execute. Transform.',14,20);
-  doc.setFontSize(12);
-  doc.text('PROGRESS REPORT CARD',196,16,{align:'right'});
-  doc.setFontSize(9);
-  doc.setTextColor(200,200,200);
-  doc.text('Generated '+today(),196,22,{align:'right'});
+  doc.setFontSize(8);doc.setTextColor(200,200,200);doc.setFont(undefined,'normal');
+  doc.text('TRACK. EXECUTE. TRANSFORM.',14,20);
+  doc.setFontSize(12);doc.setTextColor(255,255,255);
+  doc.text('PROGRESS REPORT CARD',196,13,{align:'right'});
+  doc.setFontSize(8);doc.setTextColor(180,180,180);
+  doc.text('Generated '+today(),196,20,{align:'right'});
 
+  drawWatermark();
+
+  let y=34;
+  // Name + goal compact row
   doc.setTextColor(20,20,20);
-  let y=38;
-  doc.setFontSize(13);
-  doc.setFont(undefined,'bold');
-  doc.text(CU.name,14,y);
-  doc.setFont(undefined,'normal');
-  doc.setFontSize(10);
-  doc.text(CU.email+'   ·   Goal: '+CU.goal,14,y+6);
-  y+=16;
+  doc.setFontSize(12);doc.setFont(undefined,'bold');
+  doc.text(u.name,14,y);
+  doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(100,100,100);
+  doc.text(u.email+'  ·  Goal: '+u.goal,14,y+5);
+  y+=12;
 
-  // ── Summary stats ──
-  const n=ci.length;
-  const last=ci[n-1], first=ci[0];
-  const avg=(arr)=>arr.length?(arr.reduce((s,v)=>s+v,0)/arr.length):null;
-  const avgWeight=avg(ci.map(c=>c.weight).filter(v=>v));
-  const avgWaist=avg(ci.map(c=>c.waist).filter(v=>v));
-  const avgSteps=avg(ci.map(c=>c.steps).filter(v=>v));
-  const avgSleep=avg(ci.map(c=>c.sleep).filter(v=>v));
-  const avgHunger=avg(ci.map(c=>c.hunger).filter(v=>v));
-  const wChange = (CU.baseWeight&&last) ? (last.weight-CU.baseWeight) : (n>=2?(last.weight-first.weight):null);
-  const waChange = (CU.baseWaist&&last) ? (last.waist-CU.baseWaist) : (n>=2?(last.waist-first.waist):null);
-
-  doc.setDrawColor(220,220,220);
-  doc.setFillColor(248,248,248);
-  doc.roundedRect(14,y,182,32,2,2,'FD');
-  doc.setFontSize(9);
-  doc.setTextColor(100,100,100);
-  const col=[20,60,100,142];
-  doc.text('STARTING',col[0],y+8); doc.text('CURRENT',col[1],y+8); doc.text('TOTAL CHANGE',col[2],y+8); doc.text('CHECK-INS',col[3],y+8);
-  doc.setFontSize(12);
-  doc.setTextColor(20,20,20);
-  doc.setFont(undefined,'bold');
-  doc.text((CU.baseWeight?CU.baseWeight+' kg':'—'),col[0],y+16);
-  doc.text((CU.baseWaist?CU.baseWaist+' in':'—'),col[0],y+23);
-  doc.text((last?last.weight+' kg':'—'),col[1],y+16);
-  doc.text((last?last.waist+' in':'—'),col[1],y+23);
-  doc.setTextColor(wChange==null?20:(wChange<=0?126:200), wChange==null?20:(wChange<=0?224:50), wChange==null?20:(wChange<=0?0:50));
-  doc.text(wChange!=null?((wChange>0?'+':'')+wChange.toFixed(1)+' kg'):'—',col[2],y+16);
-  doc.setTextColor(waChange==null?20:(waChange<=0?126:200), waChange==null?20:(waChange<=0?224:50), waChange==null?20:(waChange<=0?0:50));
-  doc.text(waChange!=null?((waChange>0?'+':'')+waChange.toFixed(1)+' in'):'—',col[2],y+23);
-  doc.setTextColor(20,20,20);
-  doc.text(String(n),col[3],y+16);
-  doc.setFont(undefined,'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(120,120,120);
-  doc.text('weight / waist',col[0],y+29);
-  doc.text('weight / waist',col[1],y+29);
-  doc.text('vs starting point',col[2],y+29);
-  doc.text('day streak: '+calcStreak(ci),col[3],y+29);
-  y+=42;
-
-  // ── Averages over the period ──
-  doc.setFontSize(11);
-  doc.setTextColor(20,20,20);
-  doc.setFont(undefined,'bold');
-  doc.text('Averages Over This Period',14,y);
-  doc.setFont(undefined,'normal');
-  y+=6;
-  doc.setFontSize(9);
-  const avgLine=[
-    ['Avg weight',avgWeight!=null?avgWeight.toFixed(1)+' kg':'—'],
-    ['Avg waist',avgWaist!=null?avgWaist.toFixed(1)+' in':'—'],
-    ['Avg steps',avgSteps!=null?Math.round(avgSteps).toLocaleString():'—'],
-    ['Avg sleep',avgSleep!=null?avgSleep.toFixed(1)+' hrs':'—'],
-    ['Avg hunger',avgHunger!=null?avgHunger.toFixed(1)+'/10':'—'],
-  ];
-  avgLine.forEach((row,i)=>{
-    const x=14+i*36;
-    doc.setTextColor(120,120,120);
-    doc.text(row[0],x,y);
-    doc.setTextColor(20,20,20);
-    doc.setFont(undefined,'bold');
-    doc.text(row[1],x,y+6);
-    doc.setFont(undefined,'normal');
-  });
-  y+=16;
-
-  // ── Weekly trend tables (weight & waist) ──
-  const wkW=weeklyAverages(ci,'weight');
-  const wkWa=weeklyAverages(ci,'waist');
-  if(wkW.length||wkWa.length){
-    doc.setFontSize(11);
-    doc.setFont(undefined,'bold');
-    doc.text('Weekly Trend Averages',14,y);
-    doc.setFont(undefined,'normal');
-    y+=7;
-    doc.setFontSize(9);
-    doc.setTextColor(100,100,100);
-    doc.text('Week',14,y);
-    doc.text('Avg Weight (kg)',60,y);
-    doc.text('Avg Waist (in)',120,y);
-    y+=3;
-    doc.setDrawColor(220,220,220);
-    doc.line(14,y,196,y);
-    y+=6;
-    doc.setTextColor(20,20,20);
-    const wkCount=Math.max(wkW.length,wkWa.length);
-    for(let i=0;i<wkCount;i++){
-      if(y>275){doc.addPage();y=20;}
-      const label=(wkW[i]&&wkW[i].week)||(wkWa[i]&&wkWa[i].week)||('Week '+(i+1));
-      doc.text(label,14,y);
-      doc.text(wkW[i]?wkW[i].avg.toFixed(1):'—',60,y);
-      doc.text(wkWa[i]?wkWa[i].avg.toFixed(1):'—',120,y);
-      y+=6;
-    }
-    y+=6;
+  // ── 1. OVERALL COMPOSITE SCORE (compact bar) ──
+  const overall=overallScore();
+  const tl=trafficLight(overall);
+  doc.setFillColor(235,235,235);
+  doc.roundedRect(14,y,182,12,2,2,'F');
+  if(overall!=null){
+    doc.setFillColor(...tl.rgb);
+    doc.roundedRect(14,y,Math.max(4,182*overall/100),12,2,2,'F');
   }
+  drawDot(22,y+6,tl.rgb,3);
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
+  doc.text('OVERALL: '+tl.label+(overall!=null?' — '+overall+'%':''),28,y+7.5);
+  doc.setFont(undefined,'normal');doc.setFontSize(7);
+  doc.text('Composite across all 5 dimensions',28,y+11.5);
+  y+=16;
 
-  // ── Daily log table ──
-  if(y>250){doc.addPage();y=20;}
-  doc.setFontSize(11);
-  doc.setFont(undefined,'bold');
-  doc.text('Daily Check-in Log',14,y);
-  doc.setFont(undefined,'normal');
+  // ── 2. BASELINE SUMMARY (compact single-row table) ──
+  const cols=[14,60,106,152];
+  const colW2=46;
+  // Header row
+  doc.setFillColor(14,14,14);
+  doc.rect(14,y,182,8,'F');
+  doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(160,160,160);
+  ['STARTING','CURRENT','TOTAL CHANGE','PROGRAMME'].forEach((h,i)=>doc.text(h,cols[i]+2,y+5.5));
   y+=8;
-  doc.setFontSize(9);
-  doc.setTextColor(100,100,100);
-  doc.text('Date',14,y);
-  doc.text('Wt(kg)',54,y);
-  doc.text('Waist(in)',78,y);
-  doc.text('Steps',106,y);
-  doc.text('Sleep',130,y);
-  doc.text('Hunger',152,y);
-  doc.text('Notes',176,y);
-  y+=3;
-  doc.setDrawColor(220,220,220);
-  doc.line(14,y,196,y);
-  y+=6;
+
+  // Data row — weight
+  doc.setFillColor(248,248,248);doc.rect(14,y,182,8,'F');
+  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text(baseW?baseW+' kg':'—',cols[0]+2,y+6);
+  doc.text(last?last.weight+' kg':'—',cols[1]+2,y+6);
+  const wc=wLost,wac=waLost;
+  doc.setTextColor(wc==null?20:wc<=0?0:180, wc==null?20:wc<=0?140:40, 0);
+  doc.text(wc!=null?chgStr(wc,'kg'):'—',cols[2]+2,y+6);
+  doc.setTextColor(20,20,20);
+  doc.text(sorted.length+' check-ins',cols[3]+2,y+6);
+  y+=8;
+
+  // Data row — waist
+  doc.setFillColor(240,240,240);doc.rect(14,y,182,8,'F');
+  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text(baseWa?baseWa+' in':'—',cols[0]+2,y+6);
+  doc.text(last?last.waist+' in':'—',cols[1]+2,y+6);
+  doc.setTextColor(wac==null?20:wac<=0?0:180, wac==null?20:wac<=0?140:40, 0);
+  doc.text(wac!=null?chgStr(wac,'in'):'—',cols[2]+2,y+6);
+  doc.setTextColor(20,20,20);
+  doc.text('Streak: '+calcStreak(sorted)+' days',cols[3]+2,y+6);
+  y+=10;
+
+  // ── 3. PERFORMANCE DASHBOARD — stacked 100% horizontal bars ──
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Performance Dashboard',14,y);
+  doc.setFont(undefined,'normal');doc.setFontSize(7);doc.setTextColor(130,130,130);
+  doc.text('100% stacked — shows score achieved vs remaining gap to 100%',14,y+5);
+  y+=9;
+
+  const dims=[
+    {label:'Body Composition',sub:'Weight & waist vs baseline',score:scoreBodyComp()},
+    {label:'Adherence',sub:'Protein % + workout compliance',score:scoreAdherence()},
+    {label:'Energy Proxy',sub:'Sleep hours average',score:scoreEnergy()},
+    {label:'Hunger / Cravings',sub:'Hunger score (lower = better)',score:scoreHunger()},
+    {label:'Activity',sub:'Steps ≥ 10,000/day',score:scoreActivity()},
+  ];
+
+  const barH=14, barGap=3, barX=70, barW=112;
+  dims.forEach((d,i)=>{
+    const tli=trafficLight(d.score);
+    const by=y+i*(barH+barGap);
+    const sc=d.score??0;
+
+    // Label column
+    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+    doc.text(d.label,14,by+6);
+    doc.setFont(undefined,'normal');doc.setFontSize(6.5);doc.setTextColor(130,130,130);
+    doc.text(d.sub,14,by+11);
+
+    // Traffic dot
+    drawDot(barX-5,by+7,tli.rgb,2.5);
+
+    // Background (gap = remaining %)
+    doc.setFillColor(230,230,230);
+    doc.roundedRect(barX,by,barW,barH,2,2,'F');
+
+    // Filled portion (score)
+    if(d.score!=null&&d.score>0){
+      const fillW=Math.max(4,barW*d.score/100);
+      // gradient effect: lighter shade for left, main colour for right
+      doc.setFillColor(...tli.rgb.map(v=>Math.min(255,v+60)));
+      doc.roundedRect(barX,by,fillW,barH,2,2,'F');
+      doc.setFillColor(...tli.rgb);
+      doc.roundedRect(barX+fillW*0.4,by,fillW*0.6,barH,0,0,'F');
+      // right cap fix
+      doc.roundedRect(barX+fillW-4,by,4,barH,2,2,'F');
+    }
+
+    // Score label inside bar
+    doc.setFontSize(8);doc.setFont(undefined,'bold');
+    doc.setTextColor(255,255,255);
+    if(d.score!=null){
+      const fillW=Math.max(4,barW*d.score/100);
+      if(fillW>18){
+        doc.text(d.score+'%',barX+fillW/2,by+9,{align:'center'});
+      }else{
+        doc.setTextColor(80,80,80);
+        doc.text(d.score+'%',barX+fillW+3,by+9);
+      }
+    } else {
+      doc.setTextColor(160,160,160);
+      doc.text('No data',barX+4,by+9);
+    }
+
+    // Gap label (remaining)
+    if(d.score!=null&&d.score<100){
+      const fillW=Math.max(4,barW*d.score/100);
+      const gapW=barW-fillW;
+      if(gapW>16){
+        doc.setTextColor(160,160,160);doc.setFontSize(7);doc.setFont(undefined,'normal');
+        doc.text((100-d.score)+'% gap',barX+fillW+gapW/2,by+9,{align:'center'});
+      }
+    }
+    doc.setTextColor(20,20,20);
+  });
+  y+=dims.length*(barH+barGap)+8;
+
+  // ── 4. AVERAGES — compact 3-column grid ──
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Programme Averages',14,y);y+=6;
+  const avgItems=[
+    {lbl:'Avg Weight',val:fmtAvg(overallAvgW)+' kg',score:scoreBodyComp()},
+    {lbl:'Avg Waist',val:fmtAvg(overallAvgWa)+' in',score:scoreBodyComp()},
+    {lbl:'Avg Steps',val:overallAvgSt!=null?Math.round(overallAvgSt).toLocaleString():'—',score:scoreActivity()},
+    {lbl:'Avg Sleep',val:fmtAvg(overallAvgSl)+' hrs',score:scoreEnergy()},
+    {lbl:'Avg Hunger',val:fmtAvg(overallAvgHu)+'/10',score:scoreHunger()},
+    {lbl:'Avg Water',val:fmtAvg(overallAvgWt)+' gl',score:null},
+    {lbl:'Protein Avg',val:overallProPct!=null?overallProPct+'%':'—',score:scoreAdherence()},
+    {lbl:'Workout %',val:overallWktPct!=null?overallWktPct+'%':'—',score:overallWktPct},
+    {lbl:'Steps ≥10K',val:stepsHits+'/'+sorted.length,score:scoreActivity()},
+  ];
+  const acols=3,colW=60;
+  avgItems.forEach((item,i)=>{
+    const cx=14+(i%acols)*colW;
+    const cy=y+Math.floor(i/acols)*12;
+    const tli=trafficLight(item.score);
+    drawDot(cx,cy-1,tli.rgb,1.8);
+    doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
+    doc.text(item.lbl,cx+4,cy);
+    doc.setFontSize(10);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
+    doc.text(item.val,cx+4,cy+6);
+  });
+  y+=Math.ceil(avgItems.length/acols)*12+8;
+
+  // ═══════════════════════════════════════
+  // PAGE 2+: WEEKLY BREAKDOWN
+  // ═══════════════════════════════════════
+  doc.addPage();drawWatermark();y=20;
+
+  doc.setFontSize(11);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
+  doc.text('Week-by-Week Breakdown',14,y);
+  doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(120,120,120);
+  doc.text('Traffic light shows performance vs programme target for that metric',14,y+6);
+  y+=14;
+
+  weeks.forEach((wk,wi)=>{
+    if(y>250){doc.addPage();drawWatermark();y=20;}
+    const entries=wk.entries;
+    const wAvg=avg(entries.map(c=>c.weight).filter(Boolean));
+    const waAvg=avg(entries.map(c=>c.waist).filter(Boolean));
+    const stAvg=avg(entries.map(c=>c.steps).filter(Boolean));
+    const slAvg=avg(entries.map(c=>c.sleep).filter(Boolean));
+    const huAvg=avg(entries.map(c=>c.hunger).filter(Boolean));
+    const wtAvg=avg(entries.map(c=>c.water).filter(v=>v!=null));
+    const proPct=avg(entries.filter(c=>c.protein!=null).map(c=>c.protein));
+    const wktPct=entries.filter(c=>c.workout!=null).length?
+      Math.round(entries.filter(c=>c.workout===true).length/entries.filter(c=>c.workout!=null).length*100):null;
+    const stHits=entries.filter(c=>(c.steps||0)>=10000).length;
+    const prevWk=wi>0?weeks[wi-1]:null;
+    const prevWAvg=prevWk?avg(prevWk.entries.map(c=>c.weight).filter(Boolean)):null;
+    const prevWaAvg=prevWk?avg(prevWk.entries.map(c=>c.waist).filter(Boolean)):null;
+    const wDiff=wAvg!=null&&prevWAvg!=null?chg(prevWAvg,wAvg):null;
+    const waDiff=waAvg!=null&&prevWaAvg!=null?chg(prevWaAvg,waAvg):null;
+    const notes=entries.filter(c=>c.notes).map(c=>c.notes).join(' / ').slice(0,130);
+
+    // Week traffic lights
+    const wkBodyScore=wDiff!=null?(wDiff<=0?90:wDiff<=0.5?55:20):null;
+    const wkActScore=stAvg!=null?Math.round(stAvg/10000*100):null;
+    const wkProScore=proPct!=null?Math.round(proPct):null;
+    const wkWktScore=wktPct;
+    const wkEngScore=slAvg!=null?Math.round(Math.max(0,Math.min(100,100-Math.abs(slAvg-8)*20))):null;
+    const wkHuScore=huAvg!=null?Math.round(Math.max(0,Math.min(100,100-Math.abs(huAvg-4.5)*15))):null;
+
+    // Week header
+    doc.setFillColor(14,14,14);
+    doc.rect(14,y,182,9,'F');
+    doc.setTextColor(126,224,0);doc.setFontSize(9);doc.setFont(undefined,'bold');
+    doc.text('WEEK '+(wi+1)+'  ('+wk.start+' → '+wk.end+')',17,y+6);
+    doc.setTextColor(200,200,200);doc.setFont(undefined,'normal');
+    doc.text(entries.length+' check-ins',193,y+6,{align:'right'});
+    y+=12;
+
+    // 6 metric tiles in a 3x2 grid
+    const tiles=[
+      {lbl:'Body Composition',sub:'Weight trend vs prev week',val:wAvg?wAvg.toFixed(1)+' kg'+(wDiff!=null?' ('+(wDiff>0?'+':'')+wDiff.toFixed(1)+')':''):'—',score:wkBodyScore},
+      {lbl:'Activity',sub:'Steps compliance',val:stAvg?Math.round(stAvg).toLocaleString()+'/day':'-',sub2:stHits+'/'+entries.length+' days ≥10K',score:wkActScore},
+      {lbl:'Adherence — Protein',sub:'Average protein target hit',val:proPct!=null?Math.round(proPct)+'%':'—',score:wkProScore},
+      {lbl:'Adherence — Workout',sub:'Sessions completed',val:wktPct!=null?wktPct+'%':'—',score:wkWktScore},
+      {lbl:'Energy Proxy',sub:'Avg sleep hours',val:slAvg?slAvg.toFixed(1)+' hrs':'—',score:wkEngScore},
+      {lbl:'Hunger/Cravings',sub:'Avg hunger score (lower=better)',val:huAvg?huAvg.toFixed(1)+'/10':'—',score:wkHuScore},
+    ];
+    const tileW=59,tileH=20,tileGap=2;
+    tiles.forEach((tile,ti)=>{
+      const tx=14+(ti%3)*(tileW+tileGap);
+      const ty2=y+Math.floor(ti/3)*(tileH+tileGap);
+      const tli2=trafficLight(tile.score);
+      doc.setFillColor(248,248,248);doc.setDrawColor(230,230,230);
+      doc.roundedRect(tx,ty2,tileW,tileH,1.5,1.5,'FD');
+      drawDot(tx+5,ty2+5,tli2.rgb,2.5);
+      doc.setFontSize(7);doc.setFont(undefined,'bold');doc.setTextColor(60,60,60);
+      doc.text(tile.lbl,tx+10,ty2+5.5);
+      doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
+      doc.text(tile.sub,tx+10,ty2+9.5);
+      doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(...tli2.rgb);
+      doc.text(tile.val,tx+10,ty2+16);
+      if(tile.sub2){doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);doc.text(tile.sub2,tx+10,ty2+19);}
+    });
+    y+=2*(tileH+tileGap)+4;
+
+    // Waist row
+    if(waAvg){
+      doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(100,100,100);
+      const waClr=waDiff!=null&&waDiff<=0?[0,140,0]:waDiff!=null&&waDiff>0?[180,40,40]:[80,80,80];
+      doc.setTextColor(...waClr);
+      doc.text('Waist: '+waAvg.toFixed(1)+' in'+(waDiff!=null?' ('+(waDiff>0?'+':'')+waDiff.toFixed(1)+' vs prev week)':''),17,y);
+      doc.setTextColor(20,20,20);
+      if(wtAvg!=null){doc.text('Water avg: '+wtAvg.toFixed(1)+' glasses/day',100,y);}
+      y+=5;
+    }
+
+    // Notes
+    if(notes){
+      doc.setFontSize(8);doc.setTextColor(100,100,100);doc.setFont(undefined,'italic');
+      const wrapped=doc.splitTextToSize('Notes: '+notes,178);
+      doc.text(wrapped,17,y);
+      y+=wrapped.length*4+2;
+    }
+    doc.setDrawColor(230,230,230);doc.line(14,y,196,y);y+=6;
+  });
+
+  // ═══════════════════════════════════════
+  // DAILY LOG PAGE
+  // ═══════════════════════════════════════
+  doc.addPage();drawWatermark();y=20;
+  doc.setFontSize(11);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
+  doc.text('Daily Check-in Log',14,y);y+=8;
+  const hdr=['Date','Wt','Wst','Steps','Slp','Hng','H₂O','Pro%','Wkt','SQ'];
+  const hx=[14,36,52,68,91,106,120,133,148,161];
+  doc.setFontSize(8);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
+  hdr.forEach((h,i)=>doc.text(h,hx[i],y));
+  y+=3;doc.setDrawColor(200,200,200);doc.line(14,y,196,y);y+=5;
   doc.setTextColor(20,20,20);
 
-  if(!ci.length){
-    doc.text('No check-ins recorded yet.',14,y);
-  }else{
-    ci.forEach((c,i)=>{
-      if(y>280){
-        doc.addPage();y=20;
-        doc.setFontSize(9);doc.setTextColor(100,100,100);
-        doc.text('Date',14,y);doc.text('Wt(kg)',54,y);doc.text('Waist(in)',78,y);doc.text('Steps',106,y);doc.text('Sleep',130,y);doc.text('Hunger',152,y);doc.text('Notes',176,y);
-        y+=3;doc.line(14,y,196,y);y+=6;doc.setTextColor(20,20,20);
-      }
-      if(i%2===1){doc.setFillColor(248,248,248);doc.rect(12,y-4,184,6,'F');}
-      doc.text(String(c.date),14,y);
-      doc.text(String(c.weight??''),54,y);
-      doc.text(String(c.waist??''),78,y);
-      doc.text(String((c.steps||0).toLocaleString()),106,y);
-      doc.text(String(c.sleep??''),130,y);
-      doc.text(String(c.hunger??''),152,y);
-      const notes=(c.notes||'').slice(0,28);
-      doc.text(notes,176,y);
-      y+=6;
-    });
+  sorted.forEach((c,i)=>{
+    if(y>278){
+      doc.addPage();drawWatermark();y=20;
+      doc.setFontSize(8);doc.setTextColor(120,120,120);
+      hdr.forEach((h,i2)=>doc.text(h,hx[i2],y));
+      y+=3;doc.line(14,y,196,y);y+=5;doc.setTextColor(20,20,20);
+    }
+    if(i%2===1){doc.setFillColor(248,248,248);doc.rect(12,y-3,184,5.5,'F');}
+    doc.setFontSize(7.5);
+    doc.text(c.date,hx[0],y);
+    doc.text(String(c.weight??''),hx[1],y);
+    doc.text(String(c.waist??''),hx[2],y);
+    doc.text(c.steps?(c.steps/1000).toFixed(1)+'K':'—',hx[3],y);
+    doc.text(String(c.sleep??''),hx[4],y);
+    doc.text(String(c.hunger??''),hx[5],y);
+    doc.text(String(c.water??'—'),hx[6],y);
+    // protein colour coded
+    const proClr=c.protein!=null?(c.protein>=100?[0,150,0]:c.protein>=50?[180,120,0]:[180,40,40]):[120,120,120];
+    doc.setTextColor(...proClr);
+    doc.text(c.protein!=null?c.protein+'%':'—',hx[7],y);
+    // workout colour coded
+    const wktClr=c.workout===true?[0,150,0]:c.workout===false?[180,40,40]:[120,120,120];
+    doc.setTextColor(...wktClr);
+    doc.text(c.workout===true?'✓':c.workout===false?'✗':'—',hx[8],y);
+    // sleep quality
+    const sqClr=c.sleepQual!=null?(c.sleepQual>=2?[0,150,0]:c.sleepQual===1?[180,120,0]:[180,40,40]):[120,120,120];
+    doc.setTextColor(...sqClr);
+    doc.text(c.sleepQual!=null?sqL[c.sleepQual]:'—',hx[9],y);
+    doc.setTextColor(20,20,20);
+    y+=5.5;
+  });
+
+  // ── LAST PAGE: METRIC DEFINITIONS ──
+  doc.addPage();drawWatermark();
+  drawDefinitions(20);
+
+  // Footer on all pages
+  const pageCount=doc.getNumberOfPages();
+  for(let p=1;p<=pageCount;p++){
+    doc.setPage(p);
+    doc.setFontSize(7);doc.setTextColor(160,160,160);
+    doc.text('🟢 On Track (≥75%)   🟡 Needs Attention (50–74%)   🔴 Off Track (<50%)   ⚪ No data',105,285,{align:'center'});
+    doc.text('Shredlane Coaching · shredlane1@gmail.com · +254 705 671 119 · Page '+p+' of '+pageCount,105,290,{align:'center'});
   }
 
-  // Footer
-  doc.setFontSize(8);
-  doc.setTextColor(150,150,150);
-  doc.text('Shredlane Coaching · shredlane1@gmail.com · +254 705 671 119',14,290);
-
-  doc.save('shredlane-report-'+CU.name.replace(/\s+/g,'_')+'-'+today()+'.pdf');
+  doc.save('shredlane-report-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.pdf');
   toast('📄 Report card downloaded','g');
 }
-
 // ═══════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════
