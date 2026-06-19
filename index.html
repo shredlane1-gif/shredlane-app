@@ -1572,475 +1572,361 @@ function exportMyCSV(){
 function exportMyPDF(){
   if(!CU)return;
   const u=VIEWUSER||CU;
-  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].sort((a,b)=>a.date.localeCompare(b.date));
-  const { jsPDF } = window.jspdf;
+  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].filter(e=>e&&e.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!ci.length){toast('No check-in data to export','a');return;}
+  const {jsPDF}=window.jspdf;
   const doc=new jsPDF();
 
   // ── Helpers ──
-  const avg=(arr)=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
-  const pct=(arr,key)=>{
-    const vals=arr.filter(c=>c[key]!=null);
-    if(!vals.length)return null;
-    // protein is a number 0-100, workout is boolean
-    if(typeof vals[0][key]==='number') return Math.round(vals.reduce((s,c)=>s+c[key],0)/vals.length);
-    return Math.round(vals.filter(c=>c[key]===true).length/vals.length*100);
-  };
+  const avg=arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
   const fmtAvg=(v,dp=1)=>v!=null?v.toFixed(dp):'—';
-  const chg=(from,to)=>to!=null&&from!=null?(to-from):null;
-  const chgStr=(v,unit)=>(v>0?'+':'')+v.toFixed(1)+' '+unit;
-  const sqL=['Poor','Fair','Good','Great'];
+  const chg=(a,b)=>b!=null&&a!=null?b-a:null;
+  const chgStr=(v,u)=>(v>0?'+':'')+v.toFixed(1)+u;
+  const pct=(arr,key)=>{const vals=arr.filter(c=>c[key]!=null);if(!vals.length)return null;if(typeof vals[0][key]==='number')return Math.round(vals.reduce((s,c)=>s+c[key],0)/vals.length);return Math.round(vals.filter(c=>c[key]===true).length/vals.length*100);};
 
-  // ── Traffic light scoring ──
-  // Returns [r,g,b] and label
-  function trafficLight(score){ // score 0-100
-    if(score==null)return {rgb:[150,150,150],label:'No data',emoji:'⚪'};
-    if(score>=75)return {rgb:[0,160,0],label:'On Track',emoji:'🟢'};
-    if(score>=50)return {rgb:[200,140,0],label:'Needs Attention',emoji:'🟡'};
-    return {rgb:[200,40,40],label:'Off Track',emoji:'🔴'};
-  }
+  // ── Scores ──
+  const last=ci[ci.length-1];
+  const baseW=u.baseWeight,baseWa=u.baseWaist;
+  const wLost=chg(baseW,last?.weight);
+  const waLost=chg(baseWa,last?.waist);
+  const stepsHits=ci.filter(c=>(c.steps||0)>=10000).length;
+  const avgW=avg(ci.map(c=>c.weight).filter(Boolean));
+  const avgWa=avg(ci.map(c=>c.waist).filter(Boolean));
+  const avgSt=avg(ci.map(c=>c.steps).filter(Boolean));
+  const avgSl=avg(ci.map(c=>c.sleep).filter(Boolean));
+  const avgHu=avg(ci.map(c=>c.hunger).filter(Boolean));
 
-  // Score each dimension 0-100
-  function scoreBodyComp(){
-    if(!u.baseWeight||!u.baseWaist||!last)return null;
-    const wPct=Math.max(0,Math.min(100,((u.baseWeight-last.weight)/u.baseWeight)*500+50));
-    const waPct=Math.max(0,Math.min(100,((u.baseWaist-last.waist)/u.baseWaist)*500+50));
-    return Math.round((wPct+waPct)/2);
-  }
-  function scoreAdherence(){
-    const proAvg=avg(ci.filter(c=>c.protein!=null).map(c=>c.protein));
-    const wktPct=pct(ci,'workout');
-    const vals=[proAvg,wktPct].filter(v=>v!=null);
-    return vals.length?Math.round(vals.reduce((s,v)=>s+v,0)/vals.length):null;
-  }
-  function scoreEnergy(){
-    const slAvg=avg(ci.map(c=>c.sleep).filter(Boolean));
-    if(slAvg==null)return null;
-    // 7-9 hrs = 100, scale down either side
-    return Math.round(Math.max(0,Math.min(100,100-Math.abs(slAvg-8)*20)));
-  }
-  function scoreHunger(){
-    const huAvg=avg(ci.map(c=>c.hunger).filter(Boolean));
-    if(huAvg==null)return null;
-    // 3-6 is good range, scale
-    return Math.round(Math.max(0,Math.min(100,100-Math.abs(huAvg-4.5)*15)));
-  }
-  function scoreActivity(){
-    if(!ci.length)return null;
-    return Math.round(ci.filter(c=>(c.steps||0)>=10000).length/ci.length*100);
-  }
-  function overallScore(){
-    const scores=[scoreBodyComp(),scoreAdherence(),scoreEnergy(),scoreHunger(),scoreActivity()].filter(v=>v!=null);
-    return scores.length?Math.round(scores.reduce((s,v)=>s+v,0)/scores.length):null;
+  function scoreBodyComp(){if(!baseW||!baseWa||!last)return null;const wp=Math.max(0,Math.min(100,((baseW-last.weight)/baseW)*500+50));const wap=Math.max(0,Math.min(100,((baseWa-last.waist)/baseWa)*500+50));return Math.round((wp+wap)/2);}
+  function scoreEnergy(){const s=avgSl;if(s==null)return null;return Math.round(Math.max(0,Math.min(100,100-Math.abs(s-8)*20)));}
+  function scoreHunger(){if(avgHu==null)return null;return Math.round(Math.max(0,Math.min(100,100-Math.abs(avgHu-4.5)*15)));}
+  function scoreActivity(){return ci.length?Math.round(stepsHits/ci.length*100):null;}
+  function overallScore(){const sc=[scoreBodyComp(),scoreEnergy(),scoreHunger(),scoreActivity()].filter(v=>v!=null);return sc.length?Math.round(sc.reduce((s,v)=>s+v,0)/sc.length):null;}
+
+  function trafficLight(s){
+    if(s==null)return{r:[150,150,150],hex:'#969696',label:'No data'};
+    if(s>=75)return{r:[15,160,80],hex:'#0FA050',label:'On Track'};
+    if(s>=50)return{r:[200,140,0],hex:'#C88C00',label:'Needs Attention'};
+    return{r:[200,50,50],hex:'#C83232',label:'Off Track'};
   }
 
-  // Build weekly buckets
-  const sorted=ci;
-  function buildWeeks(entries){
-    if(!entries.length)return [];
-    const startDate=new Date(entries[0].date+'T00:00:00');
-    const map={};
-    entries.forEach(c=>{
-      const wn=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
-      if(!map[wn])map[wn]={n:wn,entries:[],start:c.date,end:c.date};
-      map[wn].entries.push(c);
-      if(c.date<map[wn].start)map[wn].start=c.date;
-      if(c.date>map[wn].end)map[wn].end=c.date;
-    });
-    return Object.values(map).sort((a,b)=>a.n-b.n);
+  // ── Page footer ──
+  function drawFooter(){
+    const n=doc.getNumberOfPages();
+    for(let p=1;p<=n;p++){
+      doc.setPage(p);
+      doc.setFillColor(14,14,14);doc.rect(0,283,210,14,'F');
+      doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
+      doc.text('Shredlane Coaching · shredlane1@gmail.com · +254 705 671 119',14,291);
+      doc.text('Page '+p+' of '+n,196,291,{align:'right'});
+    }
   }
-  const weeks=buildWeeks(sorted);
 
-  // ── Overall stats ──
-  const last=sorted[sorted.length-1];
-  const baseW=u.baseWeight, baseWa=u.baseWaist;
-  const wLost=baseW&&last?chg(baseW,last.weight):null;
-  const waLost=baseWa&&last?chg(baseWa,last.waist):null;
-  const overallAvgW=avg(sorted.map(c=>c.weight).filter(Boolean));
-  const overallAvgWa=avg(sorted.map(c=>c.waist).filter(Boolean));
-  const overallAvgSt=avg(sorted.map(c=>c.steps).filter(Boolean));
-  const overallAvgSl=avg(sorted.map(c=>c.sleep).filter(Boolean));
-  const overallAvgHu=avg(sorted.map(c=>c.hunger).filter(Boolean));
-  const overallAvgWt=avg(sorted.map(c=>c.water).filter(v=>v!=null));
-  const overallProPct=pct(sorted.filter(c=>c.protein!=null).map(c=>({protein:c.protein})),'protein');
-  const overallWktPct=pct(sorted,'workout');
-  const stepsHits=sorted.filter(c=>(c.steps||0)>=10000).length;
+  // ── Page header bar ──
+  function drawHeader(subtitle){
+    doc.setFillColor(14,14,14);doc.rect(0,0,210,20,'F');
+    doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(126,224,0);
+    doc.text('SHREDLANE',14,13);
+    doc.setFontSize(8);doc.setTextColor(180,180,180);doc.setFont(undefined,'normal');
+    doc.text(subtitle,196,13,{align:'right'});
+  }
 
-  // ── Watermark helper — call on every page ──
+  // ── Watermark ──
   function drawWatermark(){
     doc.saveGraphicsState();
-    doc.setGState(new doc.GState({opacity:0.06}));
-    doc.setTextColor(80,80,80);
-    doc.setFontSize(52);doc.setFont(undefined,'bold');
+    doc.setGState(new doc.GState({opacity:0.04}));
+    doc.setFontSize(52);doc.setFont(undefined,'bold');doc.setTextColor(80,80,80);
     doc.text('SHREDLANE',105,160,{align:'center',angle:45});
     doc.restoreGraphicsState();
-    doc.setTextColor(20,20,20);
-    doc.setFont(undefined,'normal');
+    doc.setTextColor(20,20,20);doc.setFont(undefined,'normal');
   }
 
-  // ── Metric definitions footer block ──
-  const DEFS=[
-    {label:'Body Composition',desc:'Weight & waist trend vs your baseline starting point.'},
-    {label:'Adherence',desc:'Protein target % + workout compliance combined daily average.'},
-    {label:'Energy Proxy',desc:'Sleep hours average — 7–9 hrs is the optimal target range.'},
-    {label:'Hunger/Cravings',desc:'Hunger score trend — lower = better controlled appetite (scale 1–10).'},
-    {label:'Activity',desc:'Steps compliance — days where 10,000 step target was reached.'},
-    {label:'Water',desc:'Daily glasses of water logged. Target is 8 glasses per day.'},
-    {label:'Sleep Quality',desc:'Self-rated quality: Poor / Fair / Good / Great alongside hours slept.'},
-  ];
-
-  function drawDefinitions(yStart){
-    if(yStart>230){doc.addPage();drawWatermark();yStart=20;}
-    doc.setFillColor(245,245,245);
-    doc.rect(14,yStart,182,4+DEFS.length*10,'F');
-    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(80,80,80);
-    doc.text('METRIC DEFINITIONS',17,yStart+8);
-    let dy=yStart+14;
-    DEFS.forEach(d=>{
-      doc.setFont(undefined,'bold');doc.setTextColor(60,60,60);
-      doc.text(d.label+':',17,dy);
-      doc.setFont(undefined,'normal');doc.setTextColor(110,110,110);
-      doc.text(d.desc,52,dy);
-      dy+=8;
-    });
-    return dy+4;
-  }
-
-  // ── Draw traffic light dot ──
-  function drawDot(x,y,rgb,r=3){
-    doc.setFillColor(...rgb);doc.circle(x,y,r,'F');
-  }
-
-  // ═══════════════════════════════════════
-  // PAGE 1: COMPACT SUMMARY + STACKED CHART
-  // ═══════════════════════════════════════
-  // Header bar
-  doc.setFillColor(14,14,14);
-  doc.rect(0,0,210,28,'F');
-  doc.setTextColor(126,224,0);
-  doc.setFontSize(20);doc.setFont(undefined,'bold');
-  doc.text('SHREDLANE',14,13);
-  doc.setFontSize(8);doc.setTextColor(200,200,200);doc.setFont(undefined,'normal');
-  doc.text('TRACK. EXECUTE. TRANSFORM.',14,20);
-  doc.setFontSize(12);doc.setTextColor(255,255,255);
-  doc.text('PROGRESS REPORT CARD',196,13,{align:'right'});
-  doc.setFontSize(8);doc.setTextColor(180,180,180);
-  doc.text('Generated '+today(),196,20,{align:'right'});
-
+  // ══════════════════════════════════════
+  // PAGE 1 — SUMMARY
+  // ══════════════════════════════════════
+  drawHeader('PROGRESS REPORT CARD · '+today());
   drawWatermark();
+  let y=28;
 
-  let y=34;
-  // Name + goal compact row
-  doc.setTextColor(20,20,20);
-  doc.setFontSize(12);doc.setFont(undefined,'bold');
+  // Name block
+  doc.setFontSize(15);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
   doc.text(u.name,14,y);
-  doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(100,100,100);
-  doc.text(u.email+'  ·  Goal: '+u.goal,14,y+5);
-  y+=12;
-
-  // ── 1. OVERALL COMPOSITE SCORE (compact bar) ──
-  const overall=overallScore();
-  const tl=trafficLight(overall);
-  doc.setFillColor(235,235,235);
-  doc.roundedRect(14,y,182,12,2,2,'F');
-  if(overall!=null){
-    doc.setFillColor(...tl.rgb);
-    doc.roundedRect(14,y,Math.max(4,182*overall/100),12,2,2,'F');
-  }
-  drawDot(22,y+6,tl.rgb,3);
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
-  doc.text('OVERALL: '+tl.label+(overall!=null?' — '+overall+'%':''),28,y+7.5);
-  doc.setFont(undefined,'normal');doc.setFontSize(7);
-  doc.text('Composite across all 5 dimensions',28,y+11.5);
-  y+=16;
-
-  // ── 2. BASELINE SUMMARY (compact single-row table) ──
-  const cols=[14,60,106,152];
-  const colW2=46;
-  // Header row
-  doc.setFillColor(14,14,14);
-  doc.rect(14,y,182,8,'F');
-  doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(160,160,160);
-  ['STARTING','CURRENT','TOTAL CHANGE','PROGRAMME'].forEach((h,i)=>doc.text(h,cols[i]+2,y+5.5));
-  y+=8;
-
-  // Data row — weight
-  doc.setFillColor(248,248,248);doc.rect(14,y,182,8,'F');
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text(baseW?baseW+' kg':'—',cols[0]+2,y+6);
-  doc.text(last?last.weight+' kg':'—',cols[1]+2,y+6);
-  const wc=wLost,wac=waLost;
-  doc.setTextColor(wc==null?20:wc<=0?0:180, wc==null?20:wc<=0?140:40, 0);
-  doc.text(wc!=null?chgStr(wc,'kg'):'—',cols[2]+2,y+6);
-  doc.setTextColor(20,20,20);
-  doc.text(sorted.length+' check-ins',cols[3]+2,y+6);
-  y+=8;
-
-  // Data row — waist
-  doc.setFillColor(240,240,240);doc.rect(14,y,182,8,'F');
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text(baseWa?baseWa+' in':'—',cols[0]+2,y+6);
-  doc.text(last?last.waist+' in':'—',cols[1]+2,y+6);
-  doc.setTextColor(wac==null?20:wac<=0?0:180, wac==null?20:wac<=0?140:40, 0);
-  doc.text(wac!=null?chgStr(wac,'in'):'—',cols[2]+2,y+6);
-  doc.setTextColor(20,20,20);
-  doc.text('Streak: '+calcStreak(sorted)+' days',cols[3]+2,y+6);
-  y+=10;
-
-  // ── 3. PERFORMANCE DASHBOARD — stacked 100% horizontal bars ──
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Performance Dashboard',14,y);
-  doc.setFont(undefined,'normal');doc.setFontSize(7);doc.setTextColor(130,130,130);
-  doc.text('100% stacked — shows score achieved vs remaining gap to 100%',14,y+5);
-  y+=9;
-
-  const dims=[
-    {label:'Body Composition',sub:'Weight & waist vs baseline',score:scoreBodyComp()},
-    {label:'Adherence',sub:'Protein % + workout compliance',score:scoreAdherence()},
-    {label:'Energy Proxy',sub:'Sleep hours average',score:scoreEnergy()},
-    {label:'Hunger / Cravings',sub:'Hunger score (lower = better)',score:scoreHunger()},
-    {label:'Activity',sub:'Steps ≥ 10,000/day',score:scoreActivity()},
-  ];
-
-  const barH=14, barGap=3, barX=70, barW=112;
-  dims.forEach((d,i)=>{
-    const tli=trafficLight(d.score);
-    const by=y+i*(barH+barGap);
-    const sc=d.score??0;
-
-    // Label column
-    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-    doc.text(d.label,14,by+6);
-    doc.setFont(undefined,'normal');doc.setFontSize(6.5);doc.setTextColor(130,130,130);
-    doc.text(d.sub,14,by+11);
-
-    // Traffic dot
-    drawDot(barX-5,by+7,tli.rgb,2.5);
-
-    // Background (gap = remaining %)
-    doc.setFillColor(230,230,230);
-    doc.roundedRect(barX,by,barW,barH,2,2,'F');
-
-    // Filled portion (score)
-    if(d.score!=null&&d.score>0){
-      const fillW=Math.max(4,barW*d.score/100);
-      // gradient effect: lighter shade for left, main colour for right
-      doc.setFillColor(...tli.rgb.map(v=>Math.min(255,v+60)));
-      doc.roundedRect(barX,by,fillW,barH,2,2,'F');
-      doc.setFillColor(...tli.rgb);
-      doc.roundedRect(barX+fillW*0.4,by,fillW*0.6,barH,0,0,'F');
-      // right cap fix
-      doc.roundedRect(barX+fillW-4,by,4,barH,2,2,'F');
-    }
-
-    // Score label inside bar
-    doc.setFontSize(8);doc.setFont(undefined,'bold');
-    doc.setTextColor(255,255,255);
-    if(d.score!=null){
-      const fillW=Math.max(4,barW*d.score/100);
-      if(fillW>18){
-        doc.text(d.score+'%',barX+fillW/2,by+9,{align:'center'});
-      }else{
-        doc.setTextColor(80,80,80);
-        doc.text(d.score+'%',barX+fillW+3,by+9);
-      }
-    } else {
-      doc.setTextColor(160,160,160);
-      doc.text('No data',barX+4,by+9);
-    }
-
-    // Gap label (remaining)
-    if(d.score!=null&&d.score<100){
-      const fillW=Math.max(4,barW*d.score/100);
-      const gapW=barW-fillW;
-      if(gapW>16){
-        doc.setTextColor(160,160,160);doc.setFontSize(7);doc.setFont(undefined,'normal');
-        doc.text((100-d.score)+'% gap',barX+fillW+gapW/2,by+9,{align:'center'});
-      }
-    }
-    doc.setTextColor(20,20,20);
-  });
-  y+=dims.length*(barH+barGap)+8;
-
-  // ── 4. AVERAGES — compact 3-column grid ──
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Programme Averages',14,y);y+=6;
-  const avgItems=[
-    {lbl:'Avg Weight',val:fmtAvg(overallAvgW)+' kg',score:scoreBodyComp()},
-    {lbl:'Avg Waist',val:fmtAvg(overallAvgWa)+' in',score:scoreBodyComp()},
-    {lbl:'Avg Steps',val:overallAvgSt!=null?Math.round(overallAvgSt).toLocaleString():'—',score:scoreActivity()},
-    {lbl:'Avg Sleep',val:fmtAvg(overallAvgSl)+' hrs',score:scoreEnergy()},
-    {lbl:'Avg Hunger',val:fmtAvg(overallAvgHu)+'/10',score:scoreHunger()},
-    {lbl:'Avg Water',val:fmtAvg(overallAvgWt)+' gl',score:null},
-    {lbl:'Protein Avg',val:overallProPct!=null?overallProPct+'%':'—',score:scoreAdherence()},
-    {lbl:'Workout %',val:overallWktPct!=null?overallWktPct+'%':'—',score:overallWktPct},
-    {lbl:'Steps ≥10K',val:stepsHits+'/'+sorted.length,score:scoreActivity()},
-  ];
-  const acols=3,colW=60;
-  avgItems.forEach((item,i)=>{
-    const cx=14+(i%acols)*colW;
-    const cy=y+Math.floor(i/acols)*12;
-    const tli=trafficLight(item.score);
-    drawDot(cx,cy-1,tli.rgb,1.8);
-    doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
-    doc.text(item.lbl,cx+4,cy);
-    doc.setFontSize(10);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
-    doc.text(item.val,cx+4,cy+6);
-  });
-  y+=Math.ceil(avgItems.length/acols)*12+8;
-
-  // ═══════════════════════════════════════
-  // PAGE 2+: WEEKLY BREAKDOWN
-  // ═══════════════════════════════════════
-  doc.addPage();drawWatermark();y=20;
-
-  doc.setFontSize(11);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
-  doc.text('Week-by-Week Breakdown',14,y);
-  doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(120,120,120);
-  doc.text('Traffic light shows performance vs programme target for that metric',14,y+6);
+  doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(110,110,110);
+  doc.text(u.email+'  ·  Goal: '+u.goal+'  ·  '+ci.length+' check-ins  ·  '+ci[0].date+' – '+last.date,14,y+6);
   y+=14;
 
-  weeks.forEach((wk,wi)=>{
-    if(y>250){doc.addPage();drawWatermark();y=20;}
-    const entries=wk.entries;
-    const wAvg=avg(entries.map(c=>c.weight).filter(Boolean));
-    const waAvg=avg(entries.map(c=>c.waist).filter(Boolean));
-    const stAvg=avg(entries.map(c=>c.steps).filter(Boolean));
-    const slAvg=avg(entries.map(c=>c.sleep).filter(Boolean));
-    const huAvg=avg(entries.map(c=>c.hunger).filter(Boolean));
-    const wtAvg=avg(entries.map(c=>c.water).filter(v=>v!=null));
-    const proPct=avg(entries.filter(c=>c.protein!=null).map(c=>c.protein));
-    const wktPct=entries.filter(c=>c.workout!=null).length?
-      Math.round(entries.filter(c=>c.workout===true).length/entries.filter(c=>c.workout!=null).length*100):null;
-    const stHits=entries.filter(c=>(c.steps||0)>=10000).length;
-    const prevWk=wi>0?weeks[wi-1]:null;
-    const prevWAvg=prevWk?avg(prevWk.entries.map(c=>c.weight).filter(Boolean)):null;
-    const prevWaAvg=prevWk?avg(prevWk.entries.map(c=>c.waist).filter(Boolean)):null;
-    const wDiff=wAvg!=null&&prevWAvg!=null?chg(prevWAvg,wAvg):null;
-    const waDiff=waAvg!=null&&prevWaAvg!=null?chg(prevWaAvg,waAvg):null;
-    const notes=entries.filter(c=>c.notes).map(c=>c.notes).join(' / ').slice(0,130);
+  // Overall score pill
+  const overall=overallScore();
+  const tlo=trafficLight(overall);
+  doc.setFillColor(...tlo.r);
+  doc.roundedRect(14,y,50,10,2,2,'F');
+  doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
+  doc.text('OVERALL: '+(overall!=null?overall+'%':'—'),18,y+7);
+  doc.setFontSize(7);doc.setTextColor(110,110,110);doc.setFont(undefined,'normal');
+  doc.text(tlo.label,68,y+7);
+  y+=16;
 
-    // Week traffic lights
-    const wkBodyScore=wDiff!=null?(wDiff<=0?90:wDiff<=0.5?55:20):null;
-    const wkActScore=stAvg!=null?Math.round(stAvg/10000*100):null;
-    const wkProScore=proPct!=null?Math.round(proPct):null;
-    const wkWktScore=wktPct;
-    const wkEngScore=slAvg!=null?Math.round(Math.max(0,Math.min(100,100-Math.abs(slAvg-8)*20))):null;
-    const wkHuScore=huAvg!=null?Math.round(Math.max(0,Math.min(100,100-Math.abs(huAvg-4.5)*15))):null;
+  // 4 stat boxes
+  const stats=[
+    {lbl:'Weight change',val:wLost!=null?chgStr(wLost,' kg'):'—',sub:baseW?baseW+' → '+(last?.weight??'—')+' kg':'—',good:wLost!=null&&wLost<0},
+    {lbl:'Waist change',val:waLost!=null?chgStr(waLost,' in'):'—',sub:baseWa?baseWa+' → '+(last?.waist??'—')+' in':'—',good:waLost!=null&&waLost<0},
+    {lbl:'Avg steps / day',val:avgSt!=null?Math.round(avgSt).toLocaleString():'—',sub:stepsHits+'/'+ci.length+' days ≥10K',good:avgSt!=null&&avgSt>=7000},
+    {lbl:'Avg sleep',val:fmtAvg(avgSl)+' hrs',sub:'Avg hunger '+fmtAvg(avgHu)+'/10',good:avgSl!=null&&avgSl>=7},
+  ];
+  const bx=14,bw=43,bgap=3;
+  stats.forEach((s,i)=>{
+    const bxx=bx+i*(bw+bgap);
+    doc.setFillColor(246,246,246);doc.roundedRect(bxx,y,bw,22,2,2,'F');
+    doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
+    doc.text(s.lbl,bxx+4,y+7);
+    doc.setFontSize(12);doc.setFont(undefined,'bold');
+    doc.setTextColor(...(s.good?[15,160,80]:[200,50,50]));
+    doc.text(s.val,bxx+4,y+16);
+    doc.setFontSize(6.5);doc.setFont(undefined,'normal');doc.setTextColor(140,140,140);
+    doc.text(s.sub,bxx+4,y+21);
+  });
+  y+=28;
 
-    // Week header
-    doc.setFillColor(14,14,14);
-    doc.rect(14,y,182,9,'F');
-    doc.setTextColor(126,224,0);doc.setFontSize(9);doc.setFont(undefined,'bold');
-    doc.text('WEEK '+(wi+1)+'  ('+wk.start+' → '+wk.end+')',17,y+6);
-    doc.setTextColor(200,200,200);doc.setFont(undefined,'normal');
-    doc.text(entries.length+' check-ins',193,y+6,{align:'right'});
-    y+=12;
+  // Score bars
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Performance scores',14,y);y+=6;
 
-    // 6 metric tiles in a 3x2 grid
-    const tiles=[
-      {lbl:'Body Composition',sub:'Weight trend vs prev week',val:wAvg?wAvg.toFixed(1)+' kg'+(wDiff!=null?' ('+(wDiff>0?'+':'')+wDiff.toFixed(1)+')':''):'—',score:wkBodyScore},
-      {lbl:'Activity',sub:'Steps compliance',val:stAvg?Math.round(stAvg).toLocaleString()+'/day':'-',sub2:stHits+'/'+entries.length+' days ≥10K',score:wkActScore},
-      {lbl:'Adherence — Protein',sub:'Average protein target hit',val:proPct!=null?Math.round(proPct)+'%':'—',score:wkProScore},
-      {lbl:'Adherence — Workout',sub:'Sessions completed',val:wktPct!=null?wktPct+'%':'—',score:wkWktScore},
-      {lbl:'Energy Proxy',sub:'Avg sleep hours',val:slAvg?slAvg.toFixed(1)+' hrs':'—',score:wkEngScore},
-      {lbl:'Hunger/Cravings',sub:'Avg hunger score (lower=better)',val:huAvg?huAvg.toFixed(1)+'/10':'—',score:wkHuScore},
-    ];
-    const tileW=59,tileH=20,tileGap=2;
-    tiles.forEach((tile,ti)=>{
-      const tx=14+(ti%3)*(tileW+tileGap);
-      const ty2=y+Math.floor(ti/3)*(tileH+tileGap);
-      const tli2=trafficLight(tile.score);
-      doc.setFillColor(248,248,248);doc.setDrawColor(230,230,230);
-      doc.roundedRect(tx,ty2,tileW,tileH,1.5,1.5,'FD');
-      drawDot(tx+5,ty2+5,tli2.rgb,2.5);
-      doc.setFontSize(7);doc.setFont(undefined,'bold');doc.setTextColor(60,60,60);
-      doc.text(tile.lbl,tx+10,ty2+5.5);
-      doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
-      doc.text(tile.sub,tx+10,ty2+9.5);
-      doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(...tli2.rgb);
-      doc.text(tile.val,tx+10,ty2+16);
-      if(tile.sub2){doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);doc.text(tile.sub2,tx+10,ty2+19);}
+  const dims=[
+    {lbl:'Body composition',sub:'Weight & waist vs baseline',score:scoreBodyComp()},
+    {lbl:'Sleep / energy',sub:'Avg sleep hours (target 7–9h)',score:scoreEnergy()},
+    {lbl:'Hunger control',sub:'Hunger score – lower is better',score:scoreHunger()},
+    {lbl:'Activity',sub:'Days hitting 10,000 step target',score:scoreActivity()},
+  ];
+  dims.forEach(d=>{
+    const tl=trafficLight(d.score);
+    const sc=d.score??0;
+    doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+    doc.text(d.lbl,14,y+4);
+    doc.setFontSize(6);doc.setFont(undefined,'normal');doc.setTextColor(130,130,130);
+    doc.text(d.sub,14,y+9);
+    // bar bg
+    doc.setFillColor(228,228,228);doc.roundedRect(90,y,96,8,2,2,'F');
+    // bar fill
+    if(d.score!=null&&d.score>0){
+      const fw=Math.max(4,96*sc/100);
+      doc.setFillColor(...tl.r);doc.roundedRect(90,y,fw,8,2,2,'F');
+      doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
+      if(fw>14)doc.text(sc+'%',90+fw/2,y+5.5,{align:'center'});
+    }
+    // score outside if bar too short
+    if(d.score!=null&&(96*sc/100)<=14){
+      doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(...tl.r);
+      doc.text(sc+'%',90+(96*sc/100)+3,y+5.5);
+    }
+    y+=13;
+  });
+
+  // Key insight box
+  y+=4;
+  doc.setFillColor(240,248,240);doc.roundedRect(14,y,182,18,2,2,'F');
+  doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(15,100,50);
+  doc.text('Key insight',18,y+6);
+  doc.setFont(undefined,'normal');doc.setTextColor(30,80,30);
+  const lost=wLost!=null?Math.abs(wLost).toFixed(1)+' kg':null;
+  const waistLost=waLost!=null?Math.abs(waLost).toFixed(1)+' in':null;
+  let insight='Strong body composition progress';
+  if(lost&&waistLost)insight='Lost '+lost+' and '+waistLost+' of waist in '+Math.round(ci.length/7)+' weeks. ';
+  if(scoreActivity()!=null&&scoreActivity()<50)insight+='Step compliance is the main gap — only '+stepsHits+' days hit 10K target.';
+  else if(scoreActivity()!=null&&scoreActivity()>=75)insight+='Activity target well maintained.';
+  doc.text(insight,18,y+12,{maxWidth:174});
+  y+=22;
+
+  // ══════════════════════════════════════
+  // PAGE 2 — TREND CHARTS
+  // ══════════════════════════════════════
+  doc.addPage();drawHeader('TREND ANALYSIS — Full Programme History');drawWatermark();
+  y=26;
+
+  // ── Chart drawing function (Y-axis CORRECTED: high value = top of chart) ──
+  function drawChart(cy,ch,pts,label,unit,baseline,lineHex,fillHex){
+    const cx=14,cw=182,pl=26,pr=6,pt=8,pb=16;
+    const px=cx+pl,pw=cw-pl-pr,ph=ch-pt-pb,pyTop=cy+pt;
+    const valid=pts.filter(p=>p.v!=null&&!isNaN(p.v));
+    if(valid.length<2){
+      doc.setFontSize(7);doc.setTextColor(150,150,150);
+      doc.text('Not enough data',cx+cw/2,cy+ch/2,{align:'center'});
+      return;
+    }
+    const vals=valid.map(p=>p.v);
+    let lo=Math.min(...vals),hi=Math.max(...vals);
+    if(baseline!=null){lo=Math.min(lo,baseline);hi=Math.max(hi,baseline);}
+    const pad=(hi-lo)*0.15||0.5; lo-=pad; hi+=pad;
+    const range=hi-lo||1;
+    // CORRECTED: higher value → smaller Y (higher on page)
+    const tx=i=>px+i/(valid.length-1)*pw;
+    const tv=v=>pyTop+ph*(1-(v-lo)/range);  // <-- fixed axis
+
+    // background
+    doc.setFillColor(248,248,248);doc.roundedRect(cx,cy,cw,ch,2,2,'F');
+
+    // grid lines & Y labels (5 horizontal)
+    doc.setDrawColor(220,220,220);doc.setLineWidth(0.2);
+    for(let g=0;g<=4;g++){
+      const gv=lo+g/4*range;
+      const gy=tv(gv);
+      doc.line(px,gy,px+pw,gy);
+      doc.setFontSize(5);doc.setTextColor(160,160,160);
+      doc.text(gv.toFixed(1),px-2,gy+1.5,{align:'right'});
+    }
+
+    // Baseline dashed line
+    if(baseline!=null){
+      const by=tv(baseline);
+      doc.setDrawColor(200,80,80);doc.setLineWidth(0.5);
+      doc.setLineDashPattern([2,1.5],0);
+      doc.line(px,by,px+pw,by);
+      doc.setFontSize(5.5);doc.setTextColor(200,80,80);
+      doc.text('Baseline '+baseline+unit,px+pw-1,by-1.5,{align:'right'});
+      doc.setLineDashPattern([],0);
+    }
+
+    // Fill under line (simulate with vertical strokes)
+    doc.setDrawColor(fillHex);doc.setLineWidth(0.4);
+    valid.forEach((p,i)=>{
+      const x=tx(i),yy=tv(p.v);
+      doc.line(x,yy,x,pyTop+ph);
     });
-    y+=2*(tileH+tileGap)+4;
 
-    // Waist row
-    if(waAvg){
-      doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(100,100,100);
-      const waClr=waDiff!=null&&waDiff<=0?[0,140,0]:waDiff!=null&&waDiff>0?[180,40,40]:[80,80,80];
-      doc.setTextColor(...waClr);
-      doc.text('Waist: '+waAvg.toFixed(1)+' in'+(waDiff!=null?' ('+(waDiff>0?'+':'')+waDiff.toFixed(1)+' vs prev week)':''),17,y);
-      doc.setTextColor(20,20,20);
-      if(wtAvg!=null){doc.text('Water avg: '+wtAvg.toFixed(1)+' glasses/day',100,y);}
-      y+=5;
+    // Trend line
+    doc.setDrawColor(lineHex);doc.setLineWidth(1.3);
+    for(let i=1;i<valid.length;i++){
+      doc.line(tx(i-1),tv(valid[i-1].v),tx(i),tv(valid[i].v));
     }
 
-    // Notes
-    if(notes){
-      doc.setFontSize(8);doc.setTextColor(100,100,100);doc.setFont(undefined,'italic');
-      const wrapped=doc.splitTextToSize('Notes: '+notes,178);
-      doc.text(wrapped,17,y);
-      y+=wrapped.length*4+2;
+    // Dots (if ≤50 points)
+    if(valid.length<=50){
+      valid.forEach((p,i)=>{
+        const hex=lineHex;
+        const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+        doc.setFillColor(r,g,b);
+        doc.circle(tx(i),tv(p.v),0.7,'F');
+      });
     }
-    doc.setDrawColor(230,230,230);doc.line(14,y,196,y);y+=6;
-  });
 
-  // ═══════════════════════════════════════
-  // DAILY LOG PAGE
-  // ═══════════════════════════════════════
-  doc.addPage();drawWatermark();y=20;
-  doc.setFontSize(11);doc.setTextColor(20,20,20);doc.setFont(undefined,'bold');
-  doc.text('Daily Check-in Log',14,y);y+=8;
-  const hdr=['Date','Wt','Wst','Steps','Slp','Hng','H₂O','Pro%','Wkt','SQ'];
-  const hx=[14,36,52,68,91,106,120,133,148,161];
-  doc.setFontSize(8);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
-  hdr.forEach((h,i)=>doc.text(h,hx[i],y));
-  y+=3;doc.setDrawColor(200,200,200);doc.line(14,y,196,y);y+=5;
-  doc.setTextColor(20,20,20);
+    // First & last callout
+    const fp=valid[0],lp=valid[valid.length-1];
+    doc.setFontSize(6);doc.setFont(undefined,'bold');
+    const lr=parseInt(lineHex.slice(1,3),16),lg=parseInt(lineHex.slice(3,5),16),lb=parseInt(lineHex.slice(5,7),16);
+    doc.setTextColor(lr,lg,lb);
+    doc.text(fp.v.toFixed(1)+unit,tx(0),tv(fp.v)-2.5,{align:'center'});
+    doc.text(lp.v.toFixed(1)+unit,tx(valid.length-1),tv(lp.v)-2.5,{align:'center'});
 
-  sorted.forEach((c,i)=>{
-    if(y>278){
-      doc.addPage();drawWatermark();y=20;
-      doc.setFontSize(8);doc.setTextColor(120,120,120);
-      hdr.forEach((h,i2)=>doc.text(h,hx[i2],y));
-      y+=3;doc.line(14,y,196,y);y+=5;doc.setTextColor(20,20,20);
-    }
-    if(i%2===1){doc.setFillColor(248,248,248);doc.rect(12,y-3,184,5.5,'F');}
-    doc.setFontSize(7.5);
-    doc.text(c.date,hx[0],y);
-    doc.text(String(c.weight??''),hx[1],y);
-    doc.text(String(c.waist??''),hx[2],y);
-    doc.text(c.steps?(c.steps/1000).toFixed(1)+'K':'—',hx[3],y);
-    doc.text(String(c.sleep??''),hx[4],y);
-    doc.text(String(c.hunger??''),hx[5],y);
-    doc.text(String(c.water??'—'),hx[6],y);
-    // protein colour coded
-    const proClr=c.protein!=null?(c.protein>=100?[0,150,0]:c.protein>=50?[180,120,0]:[180,40,40]):[120,120,120];
-    doc.setTextColor(...proClr);
-    doc.text(c.protein!=null?c.protein+'%':'—',hx[7],y);
-    // workout colour coded
-    const wktClr=c.workout===true?[0,150,0]:c.workout===false?[180,40,40]:[120,120,120];
-    doc.setTextColor(...wktClr);
-    doc.text(c.workout===true?'✓':c.workout===false?'✗':'—',hx[8],y);
-    // sleep quality
-    const sqClr=c.sleepQual!=null?(c.sleepQual>=2?[0,150,0]:c.sleepQual===1?[180,120,0]:[180,40,40]):[120,120,120];
-    doc.setTextColor(...sqClr);
-    doc.text(c.sleepQual!=null?sqL[c.sleepQual]:'—',hx[9],y);
-    doc.setTextColor(20,20,20);
-    y+=5.5;
-  });
+    // X-axis dates (~6 labels)
+    doc.setFontSize(5);doc.setTextColor(130,130,130);doc.setFont(undefined,'normal');
+    const step=Math.max(1,Math.floor(valid.length/6));
+    valid.forEach((p,i)=>{
+      if(i===0||i===valid.length-1||i%step===0){
+        doc.text(p.date.slice(5),tx(i),pyTop+ph+6,{align:'center'});
+      }
+    });
 
-  // ── LAST PAGE: METRIC DEFINITIONS ──
-  doc.addPage();drawWatermark();
-  drawDefinitions(20);
+    // Chart label
+    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(30,30,30);
+    doc.text(label,cx+4,cy+6);
 
-  // Footer on all pages
-  const pageCount=doc.getNumberOfPages();
-  for(let p=1;p<=pageCount;p++){
-    doc.setPage(p);
-    doc.setFontSize(7);doc.setTextColor(160,160,160);
-    doc.text('🟢 On Track (≥75%)   🟡 Needs Attention (50–74%)   🔴 Off Track (<50%)   ⚪ No data',105,285,{align:'center'});
-    doc.text('Shredlane Coaching · shredlane1@gmail.com · +254 705 671 119 · Page '+p+' of '+pageCount,105,290,{align:'center'});
+    // Change badge (top right)
+    const chgV=lp.v-fp.v;
+    const isGood=chgV<=0;
+    const br=isGood?15:200,bg=isGood?160:50,bb=isGood?80:50;
+    doc.setFillColor(br,bg,bb);
+    doc.roundedRect(cx+cw-38,cy+1,36,10,2,2,'F');
+    doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
+    doc.text((chgV>0?'+':'')+chgV.toFixed(1)+unit+' overall',cx+cw-20,cy+7.5,{align:'center'});
   }
+
+  // Data arrays
+  const wtPts=ci.filter(c=>c.weight!=null).map(c=>({date:c.date,v:c.weight}));
+  const waPts=ci.filter(c=>c.waist!=null).map(c=>({date:c.date,v:c.waist}));
+  const stPts=ci.filter(c=>c.steps!=null).map(c=>({date:c.date,v:c.steps}));
+  const slPts=ci.filter(c=>c.sleep!=null).map(c=>({date:c.date,v:c.sleep}));
+
+  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Body composition',14,y);
+  doc.setFontSize(6.5);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
+  doc.text('Daily measurements · dashed = baseline · green badge = improvement',14,y+5);
+  y+=8;
+
+  drawChart(y,55,wtPts,'Weight (kg)',' kg',baseW||null,'#0F9050','#AEDCC0');y+=59;
+  drawChart(y,55,waPts,'Waist (inches)',' in',baseWa||null,'#185FA5','#B5D4F4');y+=62;
+
+  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Activity & recovery',14,y);y+=7;
+  drawChart(y,46,stPts,'Steps / day','',null,'#C87800','#FAC775');y+=50;
+  drawChart(y,38,slPts,'Sleep (hours)',' h',null,'#7B3FB0','#D4AEFA');
+
+  // ══════════════════════════════════════
+  // PAGE 3 — WEEKLY SUMMARY TABLE
+  // ══════════════════════════════════════
+  doc.addPage();drawHeader('WEEK-BY-WEEK SUMMARY');drawWatermark();
+  y=28;
+
+  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
+  doc.text('Weekly summary',14,y);
+  doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
+  doc.text('Avg values per week · ↓ = improvement on previous week · Full daily log available as CSV export',14,y+5);
+  y+=12;
+
+  // Build weekly buckets
+  const wkMap={};
+  ci.forEach(c=>{
+    const wn=Math.floor((new Date(c.date+'T00:00:00')-new Date(ci[0].date+'T00:00:00'))/(7*86400000));
+    if(!wkMap[wn])wkMap[wn]={n:wn,start:c.date,entries:[]};
+    wkMap[wn].entries.push(c);
+  });
+  const weeks=Object.values(wkMap).sort((a,b)=>a.n-b.n);
+
+  // Table header
+  const cols2=[14,46,86,112,140,162,182];
+  const hdrs=['Week','Start','Wt (kg)','Waist','Steps/d','Sleep','Hunger'];
+  doc.setFillColor(14,14,14);doc.rect(14,y,182,8,'F');
+  doc.setFontSize(7);doc.setFont(undefined,'bold');doc.setTextColor(200,200,200);
+  hdrs.forEach((h,i)=>doc.text(h,cols2[i]+1,y+5.5));
+  y+=8;
+
+  weeks.forEach((wk,wi)=>{
+    if(y>270){doc.addPage();drawHeader('WEEK-BY-WEEK SUMMARY (cont.)');drawWatermark();y=28;}
+    const e=wk.entries;
+    const wAvg=avg(e.map(c=>c.weight).filter(Boolean));
+    const waAvg=avg(e.map(c=>c.waist).filter(Boolean));
+    const stAvg=avg(e.map(c=>c.steps).filter(Boolean));
+    const slAvg=avg(e.map(c=>c.sleep).filter(Boolean));
+    const huAvg=avg(e.map(c=>c.hunger).filter(Boolean));
+    const prev=wi>0?weeks[wi-1].entries:null;
+    const prevW=prev?avg(prev.map(c=>c.weight).filter(Boolean)):null;
+    const prevWa=prev?avg(prev.map(c=>c.waist).filter(Boolean)):null;
+    const wDir=wAvg!=null&&prevW!=null?(wAvg<prevW?'↓':wAvg>prevW?'↑':''):null;
+    const waDir=waAvg!=null&&prevWa!=null?(waAvg<prevWa?'↓':waAvg>prevWa?'↑':''):null;
+
+    doc.setFillColor(wi%2===0?248:255,wi%2===0?248:255,wi%2===0?248:255);
+    doc.rect(14,y,182,8,'F');
+    doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(40,40,40);
+    doc.text('Wk '+(wi+1),cols2[0]+1,y+5.5);
+    doc.text(wk.start.slice(5),cols2[1]+1,y+5.5);
+
+    // Weight with direction arrow
+    if(wAvg!=null){
+      doc.setTextColor(wDir==='↓'?15:wDir==='↑'?180:40, wDir==='↓'?140:wDir==='↑'?40:40, wDir==='↓'?60:40);
+      doc.text(wAvg.toFixed(1)+(wDir?' '+wDir:''),cols2[2]+1,y+5.5);
+    } else {doc.setTextColor(150,150,150);doc.text('—',cols2[2]+1,y+5.5);}
+
+    if(waAvg!=null){
+      doc.setTextColor(waDir==='↓'?15:waDir==='↑'?180:40, waDir==='↓'?140:waDir==='↑'?40:40, waDir==='↓'?60:40);
+      doc.text(waAvg.toFixed(1)+(waDir?' '+waDir:''),cols2[3]+1,y+5.5);
+    } else {doc.setTextColor(150,150,150);doc.text('—',cols2[3]+1,y+5.5);}
+
+    doc.setTextColor(40,40,40);
+    doc.text(stAvg!=null?Math.round(stAvg).toLocaleString():'—',cols2[4]+1,y+5.5);
+    doc.text(slAvg!=null?slAvg.toFixed(1)+'h':'—',cols2[5]+1,y+5.5);
+    doc.text(huAvg!=null?huAvg.toFixed(1):'—',cols2[6]+1,y+5.5);
+    y+=8;
+  });
+
+  // ── Footers on all pages ──
+  drawFooter();
 
   doc.save('shredlane-report-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.pdf');
   toast('📄 Report card downloaded','g');
