@@ -719,6 +719,7 @@ const fdb = firebase.firestore();
 // returns this synced cache, so the rest of the app barely changes.
 let CACHE = {users:{}, checkins:{}};
 let fbReady = false;
+let checkinsReady = false;
 
 function gDB(){return CACHE}
 function today(){return new Date().toISOString().slice(0,10)}
@@ -756,8 +757,14 @@ fdb.collection('users').onSnapshot(snap=>{
 
 fdb.collection('checkins').onSnapshot(snap=>{
   const checkins={};
-  snap.forEach(doc=>checkins[doc.id]=doc.data().entries||[]);
+  snap.forEach(doc=>{
+    const data=doc.data();
+    // Guard: document may be deleted/empty after manual Firebase edits
+    // Strip null/undefined slots from manual Firebase deletions
+    checkins[doc.id]=(data&&Array.isArray(data.entries))?data.entries.filter(e=>e&&e.date):[];
+  });
   CACHE.checkins=checkins;
+  checkinsReady=true;
   onDataUpdate();
 },err=>console.error(err));
 
@@ -881,7 +888,13 @@ function goTab(name,btn){
   if(name==='dashboard')renderDash();
   if(name==='history')renderHistory();
   if(name==='checkin')initCI();
-  if(name==='admin')renderAdmin();
+  if(name==='admin'){
+    renderAdmin();
+    // If checkins haven't loaded yet, retry once after 1.5s
+    if(!checkinsReady){
+      setTimeout(()=>{ if(document.getElementById('scr-admin').classList.contains('active')) renderAdmin(); }, 1500);
+    }
+  }
 }
 
 function viewMember(email){
@@ -903,7 +916,7 @@ function exitViewAs(){
 // CHECK-IN
 // ═══════════════════════════════════════
 let VIEWUSER=null; // coach "view as" target user object
-function myCI(){const u=VIEWUSER||CU;return u?(gDB().checkins[u.email]||[]):[]}
+function myCI(){const u=VIEWUSER||CU;if(!u)return[];const v=gDB().checkins[u.email];return Array.isArray(v)?v:[]}
 
 // ── DATE PICKER STATE ──
 let selectedDate = today(); // YYYY-MM-DD
@@ -1121,7 +1134,8 @@ async function saveCI(){
   const no=document.getElementById('ciNotes').value.trim();
   if(!wt||isNaN(wt)){toast('Please enter your weight','r');return;}
   if(!wa||isNaN(wa)){toast('Please enter your waist','r');return;}
-  const list=(gDB().checkins[CU.email]||[]).slice();
+  const raw=gDB().checkins[CU.email];
+  const list=(Array.isArray(raw)?raw:[]).filter(e=>e&&e.date).slice();
   const t=selectedDate||today();
   const idx=list.findIndex(c=>c.date===t);
   const entry={date:t,weight:wt,waist:wa,steps:st,sleep:sl,hunger:hu,notes:no,protein:proteinPct,workout:workoutDone,sleepQual:sleepQual,water:waterCount};
@@ -1386,58 +1400,89 @@ function renderHistory(){
 function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
   const d=gDB();
-  const members=Object.values(d.users).filter(u=>u.role!=='admin');
-  const allCI=Object.values(d.checkins).flat();
-  const avgWt=allCI.filter(c=>c.weight).length?(allCI.reduce((s,c)=>s+(c.weight||0),0)/allCI.filter(c=>c.weight).length).toFixed(1):'—';
+  const allMembers=Object.values(d.users).filter(u=>u.role!=='admin');
+  const pending=allMembers.filter(u=>u.status==='pending');
+  const approved=allMembers.filter(u=>u.status==='approved');
+  const allCI=Object.values(d.checkins).map(v=>Array.isArray(v)?v.filter(e=>e&&e.date):[]).flat();
+  const ml=document.getElementById('membersList');
+  const avgWt=allCI.filter(c=>c&&c.weight).length
+    ?(allCI.reduce((s,c)=>s+(c.weight||0),0)/allCI.filter(c=>c&&c.weight).length).toFixed(1):'—';
+
   document.getElementById('commGrid').innerHTML=`
-    <div class="cm"><div class="cmv">${members.length}</div><div class="cml">Members</div></div>
-    <div class="cm"><div class="cmv">${members.filter(u=>u.status==='approved').length}</div><div class="cml">Approved</div></div>
-    <div class="cm"><div class="cmv">${members.filter(u=>u.status==='pending').length}</div><div class="cml">Pending</div></div>
-    <div class="cm"><div class="cmv">${allCI.length}</div><div class="cml">Check-ins</div></div>
+    <div class="cm"><div class="cmv">${allMembers.length}</div><div class="cml">Total Members</div></div>
+    <div class="cm"><div class="cmv">${approved.length}</div><div class="cml">Approved</div></div>
+    <div class="cm"><div class="cmv" style="color:${pending.length?'var(--amb)':'var(--grn)'}">${pending.length}</div><div class="cml">Pending</div></div>
+    <div class="cm"><div class="cmv">${allCI.length}</div><div class="cml">Total Check-ins</div></div>
     <div class="cm"><div class="cmv">${allCI.filter(c=>(c.steps||0)>=10000).length}</div><div class="cml">10K Days</div></div>
     <div class="cm"><div class="cmv">${avgWt}</div><div class="cml">Avg Wt kg</div></div>`;
 
-  const ml=document.getElementById('membersList');
-  if(!members.length){ml.innerHTML='<div style="text-align:center;padding:24px;font-size:13px;color:var(--gry)">No members registered yet</div>';return;}
-  ml.innerHTML=members.map((u,i)=>{
-    const ci=d.checkins[u.email]||[];
-    const streak=calcStreak(ci);
-    const last=ci[ci.length-1];
-    const col=COLORS[i%COLORS.length];
-    const isPend=u.status==='pending';
-    const wDiff=last&&u.baseWeight?(last.weight-u.baseWeight).toFixed(1):null;
-    const waDiff=last&&u.baseWaist?(last.waist-u.baseWaist).toFixed(1):null;
-    return `<div class="mc">
-      <div class="mc-top">
-        <div class="mc-av" style="background:${col}">${u.name.charAt(0).toUpperCase()}</div>
-        <div style="flex:1">
-          <div class="mc-nm">${u.name}</div>
-          <div class="mc-em">${u.email} · ${u.goal}</div>
-          ${u.baseWeight?`<div class="mc-em" style="color:var(--grn3)">Baseline: ${u.baseWeight}kg · ${u.baseWaist}in</div>`:''}
+  if(!allMembers.length){
+    ml.innerHTML='<div style="text-align:center;padding:24px;font-size:13px;color:var(--gry)">No members registered yet</div>';
+    return;
+  }
+
+  function memberCard(u,i){
+    try{
+      const raw=d.checkins[u.email];
+      const ci=(Array.isArray(raw)?raw:[]).filter(e=>e&&e.date);
+      const streak=calcStreak(ci);
+      const last=ci.length?ci.reduce((a,b)=>a.date>b.date?a:b):null;
+      const col=COLORS[i%COLORS.length];
+      const isPend=u.status==='pending';
+      const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
+      const waDiff=last&&u.baseWaist!=null?(last.waist-u.baseWaist).toFixed(1):null;
+      return `<div class="mc">
+        <div class="mc-top">
+          <div class="mc-av" style="background:${col}">${u.name.charAt(0).toUpperCase()}</div>
+          <div style="flex:1">
+            <div class="mc-nm">${u.name}</div>
+            <div class="mc-em">${u.email} · ${u.goal||'—'}</div>
+            ${u.baseWeight!=null?`<div class="mc-em" style="color:var(--grn3)">Baseline: ${u.baseWeight}kg · ${u.baseWaist}in</div>`:''}
+            <div class="mc-em" style="color:var(--gry)">Joined ${u.joined||'—'}</div>
+          </div>
+          <span class="bdg ${isPend?'bdg-pend':ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':ci.length?'Active':'Approved'}</span>
         </div>
-        <span class="bdg ${isPend?'bdg-pend':ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':ci.length?'Active':'Approved'}</span>
-      </div>
-      ${isPend?`<div style="display:flex;gap:8px;margin-top:6px">
-        <button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>
-        <button class="reject-btn" onclick="rejectUser('${u.email}')">❌ Remove</button>
-        <span style="font-size:11px;color:var(--gry);margin-left:auto;align-self:center">Joined ${u.joined}</span>
-      </div>`:''}
-      ${!isPend?`<div style="display:flex;gap:8px;margin-top:6px">
-        <button class="approve-btn" onclick="viewMember('${u.email}')">📊 View Dashboard</button>
-        <button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset Password</button>
-        <button class="reject-btn" onclick="rejectUser('${u.email}')">❌ Remove</button>
-      </div>` : ''}
-      ${!isPend?`<div class="mc-stats">
-        <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
-        <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak</div></div>
-        <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
-      </div>`:''}
-      ${last&&!isPend?`<div class="mc-last">
-        Last: ${last.date} · Wt: <strong style="color:${wDiff&&parseFloat(wDiff)<0?'var(--grn)':'var(--red)'}">${last.weight}kg${wDiff!==null?' ('+(parseFloat(wDiff)>0?'+':'')+wDiff+')':''}</strong> · Waist: <strong style="color:${waDiff&&parseFloat(waDiff)<0?'var(--grn)':'var(--red)'}">${last.waist}in${waDiff!==null?' ('+(parseFloat(waDiff)>0?'+':'')+waDiff+')':''}</strong> · Steps: ${(last.steps||0).toLocaleString()} · Sleep: ${last.sleep}h · Hunger: ${last.hunger}/10
-        ${last.notes?`<br><em style="color:var(--gry2);font-style:italic">"${last.notes}"</em>`:''}
-      </div>`:''}
-    </div>`;
-  }).join('');
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
+          ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 View Dashboard</button>`:''}
+          ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF Report</button>`:''}
+          ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
+          ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
+          <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'🗑️ Remove'}</button>
+        </div>
+        ${!isPend?`<div class="mc-stats">
+          <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
+          <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak 🔥</div></div>
+          <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
+        </div>`:''}
+        ${last&&!isPend?`<div class="mc-last">
+          Last: ${last.date} · Wt: <strong style="color:${wDiff&&parseFloat(wDiff)<0?'var(--grn)':'var(--red)'}">${last.weight}kg${wDiff!==null?' ('+(parseFloat(wDiff)>0?'+':'')+wDiff+'kg)':''}</strong> · Waist: <strong style="color:${waDiff&&parseFloat(waDiff)<0?'var(--grn)':'var(--red)'}">${last.waist}in${waDiff!==null?' ('+(parseFloat(waDiff)>0?'+':'')+waDiff+'in)':''}</strong> · Steps: ${(last.steps||0).toLocaleString()} · Sleep: ${last.sleep}h · Hunger: ${last.hunger}/10
+          ${last.notes?`<br><em style="color:var(--gry2);font-style:italic">"${last.notes}"</em>`:''}
+        </div>`:''}
+      </div>`;
+    }catch(err){
+      console.error('Card error for',u.email,err);
+      return `<div class="mc" style="border:1px solid var(--red);padding:12px"><div class="mc-nm">${u.name}</div><div class="mc-em" style="color:var(--red)">${u.email} — data error</div></div>`;
+    }
+  }
+
+  let html='';
+
+  if(pending.length){
+    html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--amb);margin:12px 0 8px;padding:8px 12px;background:rgba(255,184,0,.08);border-left:3px solid var(--amb);border-radius:4px">⏳ Pending Approval (${pending.length})</div>`;
+    html+=pending.map((u,i)=>memberCard(u,i)).join('');
+  } else {
+    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0 4px">✅ No pending join requests</div>`;
+  }
+
+  html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(126,224,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Approved Members (${approved.length})</div>`;
+  if(approved.length){
+    html+=approved.map((u,i)=>memberCard(u,pending.length+i)).join('');
+  } else {
+    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0">No approved members yet</div>`;
+  }
+
+  ml.innerHTML=html;
 }
 
 async function approveUser(email){
@@ -1498,7 +1543,7 @@ function exportAllCSV(){
   const members=Object.values(d.users).filter(u=>u.role!=='admin');
   const sqL=['Poor','Fair','Good','Great'];
   members.forEach(u=>{
-    const ci=d.checkins[u.email]||[];
+    const ci=Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
     if(!ci.length){
       rows.push([u.name,u.email,u.goal,u.status,u.joined,'','','','','','','','','','','']);
     }else{
@@ -1515,7 +1560,7 @@ function exportAllCSV(){
 function exportMyCSV(){
   if(!CU)return;
   const u=VIEWUSER||CU;
-  const ci=[...(gDB().checkins[u.email]||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].sort((a,b)=>a.date.localeCompare(b.date));
   const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
   const sqL=['Poor','Fair','Good','Great'];
   ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
@@ -1527,7 +1572,7 @@ function exportMyCSV(){
 function exportMyPDF(){
   if(!CU)return;
   const u=VIEWUSER||CU;
-  const ci=[...(gDB().checkins[u.email]||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].sort((a,b)=>a.date.localeCompare(b.date));
   const { jsPDF } = window.jspdf;
   const doc=new jsPDF();
 
@@ -2001,6 +2046,31 @@ function exportMyPDF(){
   toast('📄 Report card downloaded','g');
 }
 // ═══════════════════════════════════════
+
+// ── Admin: download report for a specific user by email ──
+function exportUserPDF(email){
+  const u=gDB().users[email];
+  if(!u){toast('User not found','r');return;}
+  // Temporarily set VIEWUSER so exportMyPDF picks the right user
+  const prev=VIEWUSER;
+  VIEWUSER=u;
+  exportMyPDF();
+  VIEWUSER=prev;
+}
+
+function exportUserCSV(email){
+  const u=gDB().users[email];
+  if(!u){toast('User not found','r');return;}
+  const ci=[...(Array.isArray(gDB().checkins[email])?gDB().checkins[email]:[])].filter(e=>e&&e.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!ci.length){toast('No check-ins to export for '+u.name,'a');return;}
+  const sqL=['Poor','Fair','Good','Great'];
+  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
+  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
+  const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
+  downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
+  toast('⬇️ CSV exported for '+u.name,'g');
+}
+
 // TOAST
 // ═══════════════════════════════════════
 function toast(msg,type=''){
