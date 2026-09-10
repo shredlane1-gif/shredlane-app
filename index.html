@@ -615,6 +615,10 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div id="dashContent">
       <!-- Onboarding checklist (new members) -->
       <div id="onboardWrap" style="display:none"></div>
+      <div id="clientAlertStack" class="alert-stack" style="display:none"></div>
+      <div id="remindPromptWrap" style="display:none"></div>
+      <div id="todayScorecard" style="display:none"></div>
+      <div id="goalProgressWrap" style="display:none"></div>
 
       <!-- Coach note -->
       <div id="coachNoteWrap" style="display:none"></div>
@@ -636,7 +640,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
       <div class="met-grid">
         <div class="met"><div class="met-lbl">Weight <span style="font-weight:600;color:var(--gry);text-transform:none;letter-spacing:0">(7-day avg)</span></div><div class="met-val" id="mW">—<span class="met-unit"> kg</span></div><div class="met-tr" id="mWT"></div></div>
-        <div class="met"><div class="met-lbl">Waist</div><div class="met-val" id="mWa">—<span class="met-unit"> in</span></div><div class="met-tr" id="mWaT"></div></div>
+        <div class="met"><div class="met-lbl">Waist <span style="font-weight:600;color:var(--gry);text-transform:none;letter-spacing:0">(7-day avg)</span></div><div class="met-val" id="mWa">—<span class="met-unit"> in</span></div><div class="met-tr" id="mWaT"></div></div>
         <div class="met"><div class="met-lbl">Sleep</div><div class="met-val" id="mSl">—<span class="met-unit"> hrs</span></div><div class="met-tr" id="mSlT"></div></div>
         <div class="met"><div class="met-lbl">Hunger</div><div class="met-val" id="mHu">—<span class="met-unit">/10</span></div><div class="met-tr" id="mHuT" style="font-size:11px;color:var(--gry)"></div></div>
       </div>
@@ -1843,17 +1847,26 @@ function renderClientAlerts(u, ci){
     alert = {cls:'warn', html:`⏰ <strong>Missed check-in:</strong> last log was ${gap} days ago (${last}).`,
       actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Check in now</button>`};
   }
+  // Sunday photo mode: elevate photo prompt on Sundays (after missed check-in)
   if(!alert){
     const lastPhoto = lastPhotoDate(u.email);
     const photoGap = daysSinceDate(lastPhoto);
-    if(!lastPhoto || photoGap >= 14){
+    const isSunday = new Date().getDay() === 0;
+    const needPhoto = !lastPhoto || photoGap >= 14 || (isSunday && (!lastPhoto || photoGap >= 5));
+    if(needPhoto){
       const dismissedP = localStorage.getItem('sl_photo_prompt_' + today());
       if(!dismissedP){
-        alert = {cls:'info', html: !lastPhoto
-          ? '📷 <strong>Add progress photos</strong> (aim for every Sunday).'
-          : `📷 <strong>Photo check-in:</strong> last photos were ${photoGap} days ago — Sunday is a great day to upload.`,
-          actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('tbPhotos'))">Open Photos</button>
-                   <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
+        if(isSunday){
+          alert = {cls:'info', html: '📷 <strong>Sunday photo day.</strong> Upload today’s progress photos for your coach.',
+            actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('tbPhotos'))">Upload photos</button>
+                     <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
+        } else if(!lastPhoto || photoGap >= 14){
+          alert = {cls:'info', html: !lastPhoto
+            ? '📷 <strong>Add progress photos</strong> (every Sunday).'
+            : `📷 <strong>Photo check-in:</strong> last photos were ${photoGap} days ago — Sundays are for uploads.`,
+            actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('tbPhotos'))">Open Photos</button>
+                     <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
+        }
       }
     }
   }
@@ -1875,6 +1888,67 @@ function renderClientAlerts(u, ci){
   if(!alert){ stack.style.display='none'; stack.innerHTML=''; return; }
   stack.style.display='flex';
   stack.innerHTML = `<div class="alert-card ${alert.cls}">${alert.html}<div class="alert-actions">${alert.actions||''}</div></div>`;
+}
+
+
+function renderRemindPrompt(u){
+  const wrap = document.getElementById('remindPromptWrap');
+  if(!wrap || !u || VIEWUSER || u.role==='admin'){ if(wrap) wrap.style.display='none'; return; }
+  try{
+    if(localStorage.getItem('sl_reminders_on')==='1'){ wrap.style.display='none'; return; }
+  }catch(e){}
+  if(u.status!=='approved'){ wrap.style.display='none'; return; }
+  // Show if coach just approved (nudgeReminders) OR user has not dismissed
+  let dismissed=false;
+  try{ dismissed = localStorage.getItem('sl_remind_prompt_dismiss')==='1'; }catch(e){}
+  if(!u.nudgeReminders && dismissed){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  wrap.innerHTML = `<div class="alert-card info">
+    <strong>🔔 Turn on daily reminders</strong><br>
+    Your coach recommends: <strong>6:30am</strong> weight &amp; waist · <strong>9:00pm</strong> protein, water &amp; steps
+    <div class="alert-actions">
+      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders();dismissRemindPrompt(true)">Enable reminders</button>
+      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="dismissRemindPrompt(false)">Not now</button>
+    </div>
+  </div>`;
+}
+async function dismissRemindPrompt(enabled){
+  try{ localStorage.setItem('sl_remind_prompt_dismiss','1'); }catch(e){}
+  if(CU && CU.nudgeReminders){
+    try{
+      await fdb.collection('users').doc(CU.email).set({nudgeReminders:false},{merge:true});
+      CU.nudgeReminders=false;
+      if(CACHE.users[CU.email]) CACHE.users[CU.email].nudgeReminders=false;
+    }catch(e){}
+  }
+  if(enabled) toast('Reminders scheduled for 6:30am & 9:00pm','g');
+  renderDash();
+}
+
+function renderTodayScorecard(u, ci){
+  const wrap = document.getElementById('todayScorecard');
+  if(!wrap || !u){ if(wrap) wrap.style.display='none'; return; }
+  const g = userGoals(u);
+  const t = today();
+  const todayEntry = (ci||[]).find(c=>c && c.date===t) || null;
+  const wtOk = !!(todayEntry && todayEntry.weight!=null && todayEntry.weight!=='');
+  const waOk = !!(todayEntry && todayEntry.waist!=null && todayEntry.waist!=='');
+  const water = todayEntry ? waterToMl(todayEntry.water||0) : 0;
+  const steps = todayEntry ? (todayEntry.steps||0) : 0;
+  const protein = todayEntry && todayEntry.protein!=null ? Number(todayEntry.protein) : null;
+  const wPct = Math.min(100, Math.round((water / g.waterMl) * 100));
+  const sPct = Math.min(100, Math.round((steps / g.steps) * 100));
+  const pTxt = protein==null ? '—' : (protein + '%');
+  const pOk = protein!=null && protein >= 80;
+  wrap.style.display='block';
+  wrap.innerHTML = `<div class="card-lbl" style="margin-bottom:8px">Today's scorecard</div>
+    <div class="score-strip">
+      <div class="score-cell ${wtOk?'ok':'miss'}"><div class="sc-k">Weight</div><div class="sc-v">${wtOk?'✓':'—'}</div></div>
+      <div class="score-cell ${waOk?'ok':'miss'}"><div class="sc-k">Waist</div><div class="sc-v">${waOk?'✓':'—'}</div></div>
+      <div class="score-cell ${wPct>=100?'ok':(water>0?'':'miss')}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div></div>
+      <div class="score-cell ${sPct>=100?'ok':(steps>0?'':'miss')}"><div class="sc-k">Steps</div><div class="sc-v">${sPct}%</div></div>
+      <div class="score-cell ${pOk?'ok':(protein==null?'miss':'')}"><div class="sc-k">Protein</div><div class="sc-v">${pTxt}</div></div>
+    </div>`;
 }
 
 function renderGoalProgress(u, ci){
@@ -1922,16 +1996,33 @@ function renderAdminRiskAndBulk(){
     if(reasons.length) risks.push({u, reasons, gap, adh});
   });
   risks.sort((a,b)=>b.gap-a.gap);
+  // Who hasn't logged a check-in today
+  const tday = today();
+  const notToday = approved.filter(u=>{
+    const ci = Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
+    return !ci.some(c=>c && c.date===tday);
+  }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
   if(panel){
+    let html = '';
+    html += `<div class="risk-panel" style="border-color:rgba(255,184,0,.4);margin-bottom:10px">
+      <h4 style="color:var(--amb)">Not logged today (${notToday.length}/${approved.length})</h4>
+      ${notToday.length? notToday.slice(0,20).map(u=>`
+        <div class="risk-item"><strong>${escHtml(u.name)}</strong> · ${escHtml(u.email)}
+          <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
+          <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml((u.name||'').split(' ')[0])}, quick reminder from Shredlane — please log today\'s check-in when you can.')">Remind</button>
+        </div>`).join('') : '<div class="risk-item">Everyone approved has logged today ✅</div>'}
+    </div>`;
     if(!risks.length){
-      panel.innerHTML = `<div class="risk-panel" style="border-color:rgba(255,214,0,.3)"><h4 style="color:var(--grn)">Needs attention</h4><div class="risk-item">All clear — no at-risk clients right now.</div></div>`;
+      html += `<div class="risk-panel" style="border-color:rgba(255,214,0,.3)"><h4 style="color:var(--grn)">Needs attention</h4><div class="risk-item">All clear — no at-risk clients right now.</div></div>`;
     } else {
-      panel.innerHTML = `<div class="risk-panel"><h4>Needs attention (${risks.length})</h4>${risks.slice(0,12).map(r=>`
+      html += `<div class="risk-panel"><h4>Needs attention (${risks.length})</h4>${risks.slice(0,12).map(r=>`
         <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
           <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
           <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml(r.u.name).split(' ')[0]}, checking in from Shredlane — how are you getting on?')">Msg</button>
         </div>`).join('')}</div>`;
     }
+    panel.innerHTML = html;
   }
   if(bulk){
     bulk.style.display='block';
@@ -2878,6 +2969,8 @@ function renderDash(){
   if(strL){const adh=adherencePct(u,14);strL.textContent=(wStreak?(`Day streak · ${wStreak}d train`):'Day streak')+` · ${adh}% adh`;}
   // Alerts + personal goals
   try{ renderClientAlerts(u, ci); }catch(e){ console.error(e); }
+  try{ renderRemindPrompt(u); }catch(e){ console.error(e); }
+  try{ renderTodayScorecard(u, ci); }catch(e){ console.error(e); }
   try{ renderGoalProgress(u, ci); }catch(e){ console.error(e); }
 
   // Quick actions: reminders + message coach
@@ -2918,7 +3011,25 @@ function renderDash(){
   if(mwt && weekAvg!=null && (mwt.textContent===''||mwt.innerHTML.indexOf('avg')<0)){
     // append context if unchanged from last week
   }
-  setMet('mWa','mWaT', (userGoals(u).waistUnit==='cm'?(last.waist*2.54):last.waist), userGoals(u).waistUnit, prev?.waist!=null?(userGoals(u).waistUnit==='cm'?prev.waist*2.54:prev.waist):null, true);
+  const waistUnit = userGoals(u).waistUnit;
+  const weekWaistAvgIn = (function(){
+    const start=new Date(); start.setDate(start.getDate()-6);
+    const startStr=start.toISOString().slice(0,10);
+    const vals=ci.filter(c=>c&&c.date>=startStr&&c.waist!=null&&!isNaN(c.waist)).map(c=>Number(c.waist));
+    if(!vals.length) return last.waist!=null?Number(last.waist):null;
+    return vals.reduce((a,b)=>a+b,0)/vals.length;
+  })();
+  const prevWeekWaistAvgIn = (function(){
+    const end=new Date(); end.setDate(end.getDate()-7);
+    const start=new Date(); start.setDate(start.getDate()-13);
+    const a=start.toISOString().slice(0,10), b=end.toISOString().slice(0,10);
+    const vals=ci.filter(c=>c&&c.date>=a&&c.date<=b&&c.waist!=null&&!isNaN(c.waist)).map(c=>Number(c.waist));
+    if(!vals.length) return null;
+    return vals.reduce((x,y)=>x+y,0)/vals.length;
+  })();
+  const wDisp = weekWaistAvgIn==null?null:(waistUnit==='cm'?weekWaistAvgIn*2.54:weekWaistAvgIn);
+  const wPrev = prevWeekWaistAvgIn==null?null:(waistUnit==='cm'?prevWeekWaistAvgIn*2.54:prevWeekWaistAvgIn);
+  setMet('mWa','mWaT', wDisp!=null?Number(wDisp.toFixed(1)):null, waistUnit, wPrev!=null?Number(wPrev.toFixed(1)):null, true);
   setMet('mSl','mSlT',last.sleep,'hrs',prev?.sleep,false);
   setMet('mHu','mHuT',last.hunger,'/10',prev?.hunger,true);
   document.getElementById('mHuT').textContent=HU_LBL[last.hunger]||'';
@@ -3209,9 +3320,9 @@ const renderAdmin = requireAdmin(function renderAdmin(){
 
 const approveUser = requireAdmin(async function approveUser(email){
   try{
-    await fdb.collection('users').doc(email).update({status:'approved'});
-    if(CACHE.users[email])CACHE.users[email].status='approved';
-    toast('✅ '+email+' approved','g');
+    await fdb.collection('users').doc(email).update({status:'approved', nudgeReminders:true});
+    if(CACHE.users[email]){ CACHE.users[email].status='approved'; CACHE.users[email].nudgeReminders=true; }
+    toast('✅ '+email+' approved — they will be prompted to enable 6:30am / 9:00pm reminders','g');
     renderAdmin();
   }catch(e){console.error(e);toast('⚠️ Could not approve — check connection','r');}
 });
