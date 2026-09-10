@@ -325,6 +325,25 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .tl-main{font-size:18px;font-weight:800;color:var(--grn);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px}
 .tl-sub{font-size:11px;color:var(--gry);margin-top:3px}
 
+
+/* Today's scorecard — landscape strip */
+.score-card-wrap{background:linear-gradient(135deg,#0a0a0a 0%,#141414 100%);border:1px solid rgba(255,214,0,.28);border-radius:16px;padding:14px 14px 12px;margin-bottom:14px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.score-card-wrap .score-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.score-card-wrap .score-hd-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;font-style:italic;letter-spacing:.04em;color:var(--wht)}
+.score-card-wrap .score-hd-sub{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--grn)}
+.score-strip{display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.score-strip::-webkit-scrollbar{display:none}
+.score-cell{flex:1 1 0;min-width:64px;background:#000;border:1px solid #222;border-radius:12px;padding:10px 8px;text-align:center;transition:border-color .15s,box-shadow .15s}
+.score-cell .sc-k{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:6px}
+.score-cell .sc-v{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;font-style:italic;color:#FFD600;line-height:1.1;text-shadow:0 0 18px rgba(255,214,0,.25)}
+.score-cell.ok{border-color:rgba(255,214,0,.55);box-shadow:0 0 16px rgba(255,214,0,.12);background:#050500}
+.score-cell.ok .sc-v{color:#FFD600}
+.score-cell.mid{border-color:rgba(255,184,0,.35)}
+.score-cell.mid .sc-v{color:#FFB800}
+.score-cell.miss{border-color:#2a1515;background:#0a0505}
+.score-cell.miss .sc-v{color:#FF5A5A;text-shadow:none}
+.score-cell .sc-foot{font-size:9px;font-weight:700;color:#555;margin-top:4px}
+
 /* WORKOUT TRACKER */
 .wkt-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .wkt-title-in{flex:1;padding:12px 13px;background:var(--dark2);border:1.5px solid var(--bdr2);border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--wht)}
@@ -1939,16 +1958,24 @@ function renderTodayScorecard(u, ci){
   const wPct = Math.min(100, Math.round((water / g.waterMl) * 100));
   const sPct = Math.min(100, Math.round((steps / g.steps) * 100));
   const pTxt = protein==null ? '—' : (protein + '%');
-  const pOk = protein!=null && protein >= 80;
+  const waterCls = wPct>=100 ? 'ok' : (water>0 ? 'mid' : 'miss');
+  const stepsCls = sPct>=100 ? 'ok' : (steps>0 ? 'mid' : 'miss');
+  const protCls = protein==null ? 'miss' : (protein>=80 ? 'ok' : 'mid');
+  const done = [wtOk, waOk, wPct>=100, sPct>=100, protein!=null && protein>=80].filter(Boolean).length;
   wrap.style.display='block';
-  wrap.innerHTML = `<div class="card-lbl" style="margin-bottom:8px">Today's scorecard</div>
+  wrap.innerHTML = `<div class="score-card-wrap">
+    <div class="score-hd">
+      <div class="score-hd-title">Today's scorecard</div>
+      <div class="score-hd-sub">${done}/5 done</div>
+    </div>
     <div class="score-strip">
-      <div class="score-cell ${wtOk?'ok':'miss'}"><div class="sc-k">Weight</div><div class="sc-v">${wtOk?'✓':'—'}</div></div>
-      <div class="score-cell ${waOk?'ok':'miss'}"><div class="sc-k">Waist</div><div class="sc-v">${waOk?'✓':'—'}</div></div>
-      <div class="score-cell ${wPct>=100?'ok':(water>0?'':'miss')}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div></div>
-      <div class="score-cell ${sPct>=100?'ok':(steps>0?'':'miss')}"><div class="sc-k">Steps</div><div class="sc-v">${sPct}%</div></div>
-      <div class="score-cell ${pOk?'ok':(protein==null?'miss':'')}"><div class="sc-k">Protein</div><div class="sc-v">${pTxt}</div></div>
-    </div>`;
+      <div class="score-cell ${wtOk?'ok':'miss'}"><div class="sc-k">Weight</div><div class="sc-v">${wtOk?'✓':'—'}</div><div class="sc-foot">${wtOk?'logged':'log am'}</div></div>
+      <div class="score-cell ${waOk?'ok':'miss'}"><div class="sc-k">Waist</div><div class="sc-v">${waOk?'✓':'—'}</div><div class="sc-foot">${waOk?'logged':'log am'}</div></div>
+      <div class="score-cell ${waterCls}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div><div class="sc-foot">${formatWater(water)}</div></div>
+      <div class="score-cell ${stepsCls}"><div class="sc-k">Steps</div><div class="sc-v">${sPct}%</div><div class="sc-foot">${Number(steps).toLocaleString()}</div></div>
+      <div class="score-cell ${protCls}"><div class="sc-k">Protein</div><div class="sc-v">${pTxt}</div><div class="sc-foot">${protein==null?'log pm':(protein>=80?'on target':'push it')}</div></div>
+    </div>
+  </div>`;
 }
 
 function renderGoalProgress(u, ci){
