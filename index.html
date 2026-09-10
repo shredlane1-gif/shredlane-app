@@ -344,6 +344,27 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .score-cell.miss .sc-v{color:#FF5A5A;text-shadow:none}
 .score-cell .sc-foot{font-size:9px;font-weight:700;color:#555;margin-top:4px}
 
+
+/* Coach targets — landscape strip (matches scorecard) */
+.goals-card-wrap{background:linear-gradient(135deg,#0a0a0a 0%,#141414 100%);border:1px solid rgba(255,214,0,.28);border-radius:16px;padding:14px 14px 12px;margin-bottom:14px;box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.goals-card-wrap .goals-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px}
+.goals-card-wrap .goals-hd-title{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;font-style:italic;letter-spacing:.04em;color:var(--wht)}
+.goals-card-wrap .goals-hd-sub{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#888}
+.goal-strip{display:flex;flex-direction:row;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.goal-strip::-webkit-scrollbar{display:none}
+.goal-cell{flex:1 1 0;min-width:72px;background:#000;border:1px solid #222;border-radius:12px;padding:10px 8px;text-align:center}
+.goal-cell .gc-k{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#888;margin-bottom:6px}
+.goal-cell .gc-v{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;font-style:italic;color:#FFD600;line-height:1.1;text-shadow:0 0 18px rgba(255,214,0,.25)}
+.goal-cell .gc-t{font-size:9px;font-weight:700;color:#666;margin-top:5px;line-height:1.25}
+.goal-cell .gc-bar{height:4px;background:#1a1a1a;border-radius:3px;margin-top:8px;overflow:hidden}
+.goal-cell .gc-bar>i{display:block;height:100%;background:#FFD600;border-radius:3px;box-shadow:0 0 8px rgba(255,214,0,.4)}
+.goal-cell.ok{border-color:rgba(255,214,0,.55);box-shadow:0 0 16px rgba(255,214,0,.12);background:#050500}
+.goal-cell.mid{border-color:rgba(255,184,0,.35)}
+.goal-cell.mid .gc-v{color:#FFB800}
+.goal-cell.miss{border-color:#2a1515;background:#0a0505}
+.goal-cell.miss .gc-v{color:#FF5A5A;text-shadow:none}
+.goal-cell.miss .gc-bar>i{background:#FF5A5A;box-shadow:none}
+
 /* WORKOUT TRACKER */
 .wkt-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .wkt-title-in{flex:1;padding:12px 13px;background:var(--dark2);border:1.5px solid var(--bdr2);border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--wht)}
@@ -1980,7 +2001,7 @@ function renderTodayScorecard(u, ci){
 
 function renderGoalProgress(u, ci){
   const wrap = document.getElementById('goalProgressWrap');
-  if(!wrap || !u) { if(wrap) wrap.style.display='none'; return; }
+  if(!wrap || !u){ if(wrap) wrap.style.display='none'; return; }
   const g = userGoals(u);
   const last = ci.length ? ci.reduce((a,b)=>a.date>b.date?a:b) : null;
   const water = last ? waterToMl(last.water||0) : 0;
@@ -1990,14 +2011,44 @@ function renderGoalProgress(u, ci){
   const wPct = Math.min(100, Math.round((water/g.waterMl)*100));
   const sPct = Math.min(100, Math.round((steps/g.steps)*100));
   const slPct = Math.min(100, Math.round((sleep/g.sleep)*100));
+  const waterCls = wPct>=100 ? 'ok' : (water>0 ? 'mid' : 'miss');
+  const stepsCls = sPct>=100 ? 'ok' : (steps>0 ? 'mid' : 'miss');
+  const sleepCls = slPct>=100 ? 'ok' : (sleep>0 ? 'mid' : 'miss');
+  const adhCls = adh>=70 ? 'ok' : (adh>=40 ? 'mid' : 'miss');
+  const hit = [wPct>=100, sPct>=100, slPct>=100, adh>=70].filter(Boolean).length;
   wrap.style.display='block';
-  wrap.innerHTML = `
-    <div class="goal-grid">
-      <div class="goal-card"><div class="gc-lbl">Water goal</div><div class="gc-val">${formatWater(water)}</div><div class="gc-sub">Target ${formatWater(g.waterMl)} · set by coach</div><div class="gc-bar"><i style="width:${wPct}%"></i></div></div>
-      <div class="goal-card"><div class="gc-lbl">Steps goal</div><div class="gc-val">${Number(steps).toLocaleString()}</div><div class="gc-sub">Target ${g.steps.toLocaleString()} · set by coach</div><div class="gc-bar"><i style="width:${sPct}%"></i></div></div>
-      <div class="goal-card"><div class="gc-lbl">Sleep goal</div><div class="gc-val">${sleep||'—'} h</div><div class="gc-sub">Target ${g.sleep} h · set by coach</div><div class="gc-bar"><i style="width:${slPct}%"></i></div></div>
-      <div class="goal-card"><div class="gc-lbl">Adherence 14d</div><div class="gc-val">${adh}%</div><div class="gc-sub">Check-in days / 14</div><div class="gc-bar"><i style="width:${adh}%"></i></div></div>
-    </div>`;
+  wrap.innerHTML = `<div class="goals-card-wrap">
+    <div class="goals-hd">
+      <div class="goals-hd-title">Coach targets</div>
+      <div class="goals-hd-sub">Latest log · set by coach</div>
+    </div>
+    <div class="goal-strip">
+      <div class="goal-cell ${waterCls}">
+        <div class="gc-k">Water</div>
+        <div class="gc-v">${formatWater(water)}</div>
+        <div class="gc-t">Target ${formatWater(g.waterMl)}</div>
+        <div class="gc-bar"><i style="width:${wPct}%"></i></div>
+      </div>
+      <div class="goal-cell ${stepsCls}">
+        <div class="gc-k">Steps</div>
+        <div class="gc-v">${Number(steps).toLocaleString()}</div>
+        <div class="gc-t">Target ${Number(g.steps).toLocaleString()}</div>
+        <div class="gc-bar"><i style="width:${sPct}%"></i></div>
+      </div>
+      <div class="goal-cell ${sleepCls}">
+        <div class="gc-k">Sleep</div>
+        <div class="gc-v">${sleep||'—'}h</div>
+        <div class="gc-t">Target ${g.sleep}h</div>
+        <div class="gc-bar"><i style="width:${slPct}%"></i></div>
+      </div>
+      <div class="goal-cell ${adhCls}">
+        <div class="gc-k">Adherence</div>
+        <div class="gc-v">${adh}%</div>
+        <div class="gc-t">Check-ins / 14 days</div>
+        <div class="gc-bar"><i style="width:${adh}%"></i></div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderAdminRiskAndBulk(){
