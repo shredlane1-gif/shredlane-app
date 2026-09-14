@@ -600,9 +600,9 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
             <option>Body recomposition</option><option>Maintenance</option>
           </select>
         </div>
-        <div class="field"><label>Starting Weight (kg)</label><input class="fi" type="number" id="rWt" placeholder="e.g. 85" step="0.1" inputmode="decimal"></div>
+        <div class="field"><label>Starting Weight (kg)</label><input class="fi" type="text" id="rWt" placeholder="e.g. 85.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off"></div>
       </div>
-      <div class="field"><label>Starting Waist (inches)</label><input class="fi" type="number" id="rWa" placeholder="e.g. 36.5" step="0.5" inputmode="decimal"></div>
+      <div class="field"><label>Starting Waist (inches)</label><input class="fi" type="text" id="rWa" placeholder="e.g. 36.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off"></div>
       <button class="a-btn" onclick="doRegister()">Create Account →</button>
       <div class="a-err" id="rErr"></div>
       <div class="a-note">By registering you confirm you are an active Shredlane client. Your account requires coach approval before you can access the app.</div>
@@ -759,13 +759,13 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="card">
       <div class="card-lbl">Body Metrics</div>
       <div class="ci-row" style="margin-bottom:16px">
-        <div><div class="ci-lbl">Weight <span class="ci-lv" id="ciWtL">— kg</span></div><input class="ci-in" type="number" id="ciWt" placeholder="e.g. 82.5" step="0.1" inputmode="decimal" oninput="document.getElementById('ciWtL').textContent=this.value?this.value+' kg':'— kg'"></div>
+        <div><div class="ci-lbl">Weight <span class="ci-lv" id="ciWtL">— kg</span></div><input class="ci-in" type="text" id="ciWt" placeholder="e.g. 82.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="document.getElementById('ciWtL').textContent=this.value?this.value+' kg':'— kg'"></div>
         <div><div class="ci-lbl">Waist <span class="ci-lv" id="ciWaL">— in</span>
         <span class="unit-toggle" id="waistUnitToggle">
           <button type="button" id="wuIn" class="on" onclick="setWaistUnit('in')">in</button>
           <button type="button" id="wuCm" onclick="setWaistUnit('cm')">cm</button>
         </span>
-      </div><input class="ci-in" type="number" id="ciWa" placeholder="e.g. 34.5" step="0.5" inputmode="decimal" oninput="(function(v){const u=(CU&&userGoals(CU).waistUnit)||'in';document.getElementById('ciWaL').textContent=v?v+' '+u:'— '+u;})(this.value)"></div>
+      </div><input class="ci-in" type="text" id="ciWa" placeholder="e.g. 34.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="(function(v){const u=(CU&&userGoals(CU).waistUnit)||'in';document.getElementById('ciWaL').textContent=v?v+' '+u:'— '+u;})(this.value)"></div>
       </div>
       <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
     </div>
@@ -1704,6 +1704,15 @@ const WATER_TARGET_ML = 3000;
 const WATER_GLASS_ML = 250; // only for migrating old 1–15 "glasses" values
 let waterCount = 0; // millilitres
 
+
+function parseDec(v){
+  if(v==null||v==='') return NaN;
+  if(typeof v==='number') return v;
+  const s=String(v).trim().replace(',', '.');
+  const n=parseFloat(s);
+  return n;
+}
+
 function waterToMl(v){
   if(v==null||v===''||isNaN(Number(v))) return 0;
   v = Number(v);
@@ -2148,7 +2157,7 @@ function exportUserWeekPDF(email){
 async function saveCI(){
   if(!CU)return;
   if(CU.status==='pending'){toast('⏳ Your account is awaiting coach approval — check-ins are locked until then.','a');return;}
-  const wt=parseFloat(document.getElementById('ciWt').value);
+  const wt=parseDec(document.getElementById('ciWt').value);
   const _waUnit=(typeof userGoals==='function'&&CU)?userGoals(CU).waistUnit:'in';
   const wa=waistToStorage(document.getElementById('ciWa').value, _waUnit);
   const st=parseInt(document.getElementById('ciSt').value)||0;
@@ -2301,7 +2310,7 @@ function renderExerciseBuilder(){
         <div class="set-row">
           <div class="set-n">${si+1}</div>
           <input class="set-in" type="number" inputmode="numeric" placeholder="${s.hint?('target '+escAttr(s.hint)):'reps'}" value="${s.reps!==''&&s.reps!=null?s.reps:''}" oninput="updateSet(${ei},${si},'reps',this.value)" aria-label="Reps set ${si+1}">
-          <input class="set-in" type="number" inputmode="decimal" step="0.5" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
+          <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
           <button class="set-del" onclick="removeSet(${ei},${si});startRestTimer(90)" title="Remove set / start rest" aria-label="Remove set">✕</button>
         </div>`).join('')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
@@ -2321,8 +2330,10 @@ function updateSet(ei,si,field,v){const ex=wktBuilder.exercises[ei];if(!ex||!ex.
 function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:''});renderExerciseBuilder();}
 function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:''});renderExerciseBuilder();}
 
+let _savingWorkout=false;
 async function saveWorkout(){
   if(!CU)return;
+  if(_savingWorkout){ toast('Saving… please wait','a'); return; }
   if(CU.status==='pending'&&!VIEWUSER){toast('⏳ Your account is awaiting coach approval.','a');return;}
   const u=VIEWUSER||CU;
   const title=document.getElementById('wktTitleIn').value.trim();
@@ -2330,12 +2341,18 @@ async function saveWorkout(){
   const exercises=wktBuilder.exercises.map((ex,i)=>({
     name:(ex.name||'').trim()||('Exercise '+(i+1)),
     sets:(ex.sets||[]).map(s=>({
-      reps:(s.reps===''||s.reps==null)?null:parseInt(s.reps),
-      weight:(s.weight===''||s.weight==null)?null:parseFloat(s.weight)
+      reps:(s.reps===''||s.reps==null)?null:parseInt(s.reps,10),
+      weight:(s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight))
     }))
   }));
-  const entry={id:wktBuilder.id||('w'+Date.now()),date:d,title,exercises};
+  // Assign id once so double-taps update the same entry instead of creating duplicates
+  if(!wktBuilder.id) wktBuilder.id = 'w'+Date.now();
+  const entry={id:wktBuilder.id,date:d,title,exercises};
   const offline = (typeof navigator!=='undefined' && navigator.onLine===false);
+  const btn=document.getElementById('saveWktBtn');
+  const prevLabel = btn ? btn.textContent : '';
+  _savingWorkout = true;
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; btn.style.opacity='0.7'; }
   try{
     const ref=fdb.collection('workouts').doc(u.email);
     let list=[];
@@ -2352,12 +2369,12 @@ async function saveWorkout(){
       }catch(e){}
     }
     const idx=list.findIndex(w=>w.id===entry.id);
-    if(idx>=0)list[idx]=entry;else list.push(entry);
-    // plain set — works offline; transactions do not
+    const isUpdate = idx>=0;
+    if(isUpdate) list[idx]=entry; else list.push(entry);
     await ref.set({entries:list});
     CACHE.workouts[u.email]=list;
-    if(offline) toast('💾 Offline: workout queued on this phone — will sync when online','g');
-    else toast(wktBuilder.id?'🏋️ Workout updated!':'🏋️ Workout saved!','g');
+    if(offline) toast('💾 Offline: workout queued — will sync when online','g');
+    else toast(isUpdate?'✅ Workout updated':'✅ Workout saved','g');
     closeWorkoutLogger();
     renderWorkoutsScreen();
   }catch(e){
@@ -2367,9 +2384,12 @@ async function saveWorkout(){
     const localIdx=CACHE.workouts[u.email].findIndex(w=>w.id===entry.id);
     if(localIdx>=0)CACHE.workouts[u.email][localIdx]=entry;
     else CACHE.workouts[u.email].push(entry);
-    toast(offline?'💾 Saved on phone (sync when online)':'⚠️ Could not reach server — saved on this phone','a');
+    toast(offline?'💾 Saved on phone (sync when online)':'⚠️ Saved on this phone — will sync when online','a');
     closeWorkoutLogger();
     renderWorkoutsScreen();
+  }finally{
+    _savingWorkout=false;
+    if(btn){ btn.disabled=false; btn.style.opacity=''; if(prevLabel) btn.textContent=prevLabel; }
   }
 }
 
@@ -3874,19 +3894,57 @@ function exportUserCSV(email){
 // ═══════════════════════════════════════
 // CLIENT UX PACK — reminders, rest timer, PWA, offline, share, etc.
 // ═══════════════════════════════════════
-let _restInterval=null,_restLeft=0;
+let _restInterval=null,_restLeft=0,_restAudioCtx=null;
+function playRestAlarm(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    if(!_restAudioCtx) _restAudioCtx = new AC();
+    const ctx = _restAudioCtx;
+    if(ctx.state==='suspended') ctx.resume();
+    // Three short beeps
+    [0, 0.22, 0.44].forEach((t,i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = i===2 ? 990 : 880;
+      gain.gain.value = 0.0001;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const start = ctx.currentTime + t;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+      osc.start(start);
+      osc.stop(start + 0.2);
+    });
+  }catch(e){ console.log('alarm audio', e); }
+  try{ if(navigator.vibrate) navigator.vibrate([300,120,300,120,400]); }catch(e){}
+  try{
+    if('Notification' in window && Notification.permission==='granted'){
+      new Notification('Shredlane — Rest over', {body:'Time for your next set 💪', icon:'./icon-192.png', tag:'rest-timer'});
+    }
+  }catch(e){}
+}
 function startRestTimer(secs){
   secs=secs||90;
   _restLeft=secs;
   const box=document.getElementById('restTimer');
   const disp=document.getElementById('restTimerDisplay');
   if(box)box.classList.add('show');
+  // Unlock audio on user gesture (required on iOS)
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(AC){
+      if(!_restAudioCtx) _restAudioCtx = new AC();
+      if(_restAudioCtx.state==='suspended') _restAudioCtx.resume();
+    }
+  }catch(e){}
   function tick(){
     const m=Math.floor(_restLeft/60),s=_restLeft%60;
     if(disp)disp.textContent=m+':'+String(s).padStart(2,'0');
     if(_restLeft<=0){
       stopRestTimer();
-      try{if(navigator.vibrate)navigator.vibrate([200,100,200]);}catch(e){}
+      playRestAlarm();
       toast('⏱ Rest done — next set!','g');
       return;
     }
