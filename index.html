@@ -2330,6 +2330,62 @@ function updateSet(ei,si,field,v){const ex=wktBuilder.exercises[ei];if(!ex||!ex.
 function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:''});renderExerciseBuilder();}
 function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:''});renderExerciseBuilder();}
 
+
+// ── Personal records (heaviest working set per exercise name) ──
+function normalizeExName(n){
+  return String(n||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function bestWeightForExercise(workouts, exName, excludeId){
+  const key = normalizeExName(exName);
+  if(!key) return null;
+  let best = null;
+  (workouts||[]).forEach(w=>{
+    if(!w || (excludeId && w.id===excludeId)) return;
+    (w.exercises||[]).forEach(ex=>{
+      if(normalizeExName(ex.name)!==key) return;
+      (ex.sets||[]).forEach(s=>{
+        const wt = parseDec(s.weight);
+        if(isNaN(wt) || wt<=0) return;
+        if(best==null || wt>best) best = wt;
+      });
+    });
+  });
+  return best;
+}
+function detectPRs(entry, priorWorkouts){
+  const prs = [];
+  (entry.exercises||[]).forEach(ex=>{
+    let setBest = null;
+    (ex.sets||[]).forEach(s=>{
+      const wt = parseDec(s.weight);
+      if(!isNaN(wt) && wt>0 && (setBest==null || wt>setBest)) setBest = wt;
+    });
+    if(setBest==null) return;
+    const prev = bestWeightForExercise(priorWorkouts, ex.name, entry.id);
+    if(prev==null || setBest > prev + 0.05){
+      prs.push({ name: (ex.name||'').trim()||'Exercise', weight: setBest, prev: prev });
+    }
+  });
+  return prs;
+}
+function allTimePRs(workouts){
+  const map = {};
+  (workouts||[]).forEach(w=>{
+    (w.exercises||[]).forEach(ex=>{
+      const key = normalizeExName(ex.name);
+      if(!key) return;
+      (ex.sets||[]).forEach(s=>{
+        const wt = parseDec(s.weight);
+        if(isNaN(wt)||wt<=0) return;
+        if(!map[key] || wt > map[key].weight){
+          map[key] = { name: (ex.name||'').trim(), weight: wt, date: w.date };
+        }
+      });
+    });
+  });
+  return Object.values(map).sort((a,b)=>b.weight-a.weight);
+}
+
 let _savingWorkout=false;
 async function saveWorkout(){
   if(!CU)return;
@@ -2373,8 +2429,16 @@ async function saveWorkout(){
     if(isUpdate) list[idx]=entry; else list.push(entry);
     await ref.set({entries:list});
     CACHE.workouts[u.email]=list;
+    // PR detection vs history before this save
+    const prior = (list||[]).filter(w=>w && w.id!==entry.id);
+    const prs = detectPRs(entry, prior);
     if(offline) toast('💾 Offline: workout queued — will sync when online','g');
-    else toast(isUpdate?'✅ Workout updated':'✅ Workout saved','g');
+    else if(prs.length){
+      const msg = prs.slice(0,3).map(p=>'🏆 PR '+p.name+': '+p.weight+' kg'+(p.prev!=null?' (was '+p.prev+' kg)':'')).join(' · ');
+      toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
+    } else {
+      toast(isUpdate?'✅ Workout updated':'✅ Workout saved','g');
+    }
     closeWorkoutLogger();
     renderWorkoutsScreen();
   }catch(e){
@@ -2446,6 +2510,34 @@ function renderWorkoutsScreen(){
       <div class="met" style="padding:12px"><div class="met-lbl">Total Workouts</div><div class="met-val" style="font-size:24px">${list.length}</div></div>
       <div class="met" style="padding:12px"><div class="met-lbl">Last 30 Days</div><div class="met-val" style="font-size:24px">${last30}</div></div>
       <div class="met" style="padding:12px"><div class="met-lbl">Total Sets</div><div class="met-val" style="font-size:24px">${totalSets}</div></div>`;
+  }
+
+  // Personal records strip
+  let prWrap=document.getElementById('wktPRWrap');
+  if(!prWrap){
+    prWrap=document.createElement('div');
+    prWrap.id='wktPRWrap';
+    const st=document.getElementById('wktStatsRow');
+    if(st&&st.parentNode) st.parentNode.insertBefore(prWrap, st.nextSibling);
+  }
+  if(prWrap){
+    const prs=allTimePRs(list).slice(0,8);
+    if(prs.length){
+      prWrap.style.display='block';
+      prWrap.innerHTML=`<div class="card" style="margin-bottom:12px;padding:12px 14px">
+        <div class="card-lbl" style="margin-bottom:8px">🏆 Personal records</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${prs.map(p=>`<div style="background:#000;border:1px solid rgba(255,214,0,.4);border-radius:10px;padding:8px 10px;min-width:90px">
+            <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.05em">${escHtml(p.name)}</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;font-style:italic;color:#FFD600">${p.weight} <span style="font-size:12px">kg</span></div>
+            <div style="font-size:10px;color:#666">${escHtml(p.date||'')}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    } else {
+      prWrap.style.display='none';
+      prWrap.innerHTML='';
+    }
   }
 
   // Start from assigned program — full plan is already shown above
@@ -3373,6 +3465,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
+          ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF Report</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📅 Week PDF</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
@@ -3415,6 +3508,8 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   }
 
   ml.innerHTML=html;
+  try{ renderAdminDemos(); }catch(e){ console.error(e); }
+  try{ renderAdminMemberPhotos(); }catch(e){ console.error(e); }
 });
 
 const approveUser = requireAdmin(async function approveUser(email){
@@ -4479,7 +4574,7 @@ function viewMemberPhotos(email){
   if(!user) return;
   VIEWUSER = user;
   goTab('photos');
-  toast('Viewing as '+user.name,'a');
+  toast('📷 Viewing '+user.name+"'s photos",'g');
 }
   
 </script>
