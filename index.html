@@ -627,12 +627,27 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
   <div class="tbar" id="tabBar">
     <button class="tb active" id="tbDashboard" onclick="goTab('dashboard',this)"><span class="tb-i">📊</span><span class="tb-l">Dashboard</span></button>
-    <button class="tb" onclick="goTab('checkin',this)"><span class="tb-i">✏️</span><span class="tb-l">Check-in</span></button>
+    <button class="tb" id="tbCheckin" onclick="goTab('checkin',this)"><span class="tb-i">✏️</span><span class="tb-l">Check-in</span></button>
     <button class="tb" id="tbHistory" onclick="goTab('history',this)"><span class="tb-i">📅</span><span class="tb-l">History</span></button>
     <button class="tb" id="tbWorkouts" onclick="goTab('workouts',this)"><span class="tb-i">🏋️</span><span class="tb-l">Train</span></button>
-       <button class="tb" id="photosTab" onclick="goTab('photos',this)"><span class="tb-i">📸</span><span class="tb-l">Photos</span></button>
+    <button class="tb" id="photosTab" onclick="goTab('photos',this)"><span class="tb-i">📸</span><span class="tb-l">Photos</span></button>
     <button class="tb" id="libraryTab" onclick="goTab('library',this)"><span class="tb-i">🎬</span><span class="tb-l">Library</span></button>
     <button class="tb" id="adminTab" style="display:none" onclick="goTab('admin',this)"><span class="tb-i">🔧</span><span class="tb-l">Admin</span></button>
+  </div>
+
+  <!-- Sticky coach navigation when viewing a client -->
+  <div id="coachViewBar" style="display:none;position:sticky;top:0;z-index:200;background:#0a0a00;border-bottom:1px solid rgba(255,214,0,.35);padding:10px 12px;margin:0 0 8px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:800;color:var(--grn);min-width:0;flex:1">👁️ <span id="coachViewName">Client</span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('dashboard',document.getElementById('tbDashboard'))">Dashboard</button>
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Train</button>
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Check-in</button>
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('history',document.getElementById('tbHistory'))">History</button>
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('photos',document.getElementById('photosTab'))">Photos</button>
+        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="exitViewAs()">← Admin</button>
+      </div>
+    </div>
   </div>
 
   <!-- DASHBOARD -->
@@ -899,7 +914,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="scr-ttl">ADMIN</div>
     <div class="scr-sub">Coach dashboard</div>
     <div class="adm-banner">🔒 Private — coach view only</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="b-secondary" style="padding:10px 16px;" onclick="exportAllCSV()">⬇️ Download all data (CSV)</button><button class="b-secondary" style="padding:10px 16px;border-color:var(--grn);color:var(--grn);" onclick="generateDemoCheckins()">🎲 Generate Demo Check-ins</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="b-secondary" style="padding:10px 16px;" onclick="exportAllCSV()">⬇️ Download all data (CSV)</button></div>
     <div class="card"><div class="card-lbl">Community Stats</div><div class="comm-grid" id="commGrid"></div></div>
     <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin-bottom:10px">Member Approvals & Data</div>
     <div id="membersList"></div>
@@ -1459,6 +1474,7 @@ function goTab(name,btn){
   }
     if(name==='photos') renderPhotos();
   if(name==='library') renderLibrary();
+  try{ updateCoachBar(); }catch(e){}
 }
 
 function activateTabButton(id){
@@ -1480,7 +1496,7 @@ function goToWorkoutsFromCI(){
 
 function viewMember(email){viewMemberAs(email,'dashboard');}
 
-const TAB_BTN_IDS={dashboard:'tbDashboard',checkin:null,history:'tbHistory',workouts:'tbWorkouts',program:'tbWorkouts'};
+const TAB_BTN_IDS={dashboard:'tbDashboard',checkin:'tbCheckin',history:'tbHistory',workouts:'tbWorkouts',program:'tbWorkouts',photos:'photosTab',library:'libraryTab',admin:'adminTab'};
 function viewMemberAs(email,tab){
   if(!CU||CU.role!=='admin')return;
   const u=gDB().users[email];
@@ -1489,10 +1505,23 @@ function viewMemberAs(email,tab){
   goTab(tab,null);
   const btnId=TAB_BTN_IDS[tab];
   if(btnId)activateTabButton(btnId);
+  try{ updateCoachBar(); }catch(e){}
 }
 
+function updateCoachBar(){
+  const bar = document.getElementById('coachViewBar');
+  const nm = document.getElementById('coachViewName');
+  if(!bar) return;
+  if(VIEWUSER){
+    bar.style.display = 'block';
+    if(nm) nm.textContent = VIEWUSER.name + ' · ' + VIEWUSER.email;
+  } else {
+    bar.style.display = 'none';
+  }
+}
 function exitViewAs(){
   VIEWUSER=null;
+  updateCoachBar();
   document.querySelectorAll('.tb').forEach(t=>t.classList.remove('active'));
   document.getElementById('adminTab').classList.add('active');
   goTab('admin',null);
@@ -3503,7 +3532,6 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF Report</button>`:''}
-          ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📅 Week PDF</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
           ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
           <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'🗑️ Remove'}</button>
