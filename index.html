@@ -655,7 +655,6 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('dashboard',document.getElementById('tbDashboard'))">Dashboard</button>
         <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Train</button>
-        <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Check-in</button>
         <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('history',document.getElementById('tbHistory'))">History</button>
         <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px" onclick="goTab('photos',document.getElementById('photosTab'))">Photos</button>
         <button class="b-secondary" style="width:auto;padding:6px 10px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="exitViewAs()">← Admin</button>
@@ -1457,6 +1456,11 @@ async function doLogout(){
 // ═══════════════════════════════════════
 function goTab(name,btn){
   if(name==='program') name='workouts';
+  if(name==='checkin' && VIEWUSER){
+    toast('Check-in is only for clients — use History to review their logs','a');
+    name='history';
+    btn = document.getElementById('tbHistory') || btn;
+  }
   if((name==='checkin'||name==='workouts') && CU && CU.status==='pending' && !VIEWUSER){
     toast('⏳ This unlocks once the coach approves your account.','a');
     return;
@@ -1525,12 +1529,16 @@ function viewMemberAs(email,tab){
 function updateCoachBar(){
   const bar = document.getElementById('coachViewBar');
   const nm = document.getElementById('coachViewName');
+  const ciTab = document.getElementById('tbCheckin');
   if(!bar) return;
   if(VIEWUSER){
     bar.style.display = 'block';
     if(nm) nm.textContent = VIEWUSER.name + ' · ' + VIEWUSER.email;
+    // Admins viewing a client do not need Check-in tab
+    if(ciTab) ciTab.style.display = 'none';
   } else {
     bar.style.display = 'none';
+    if(ciTab) ciTab.style.display = '';
   }
 }
 function exitViewAs(){
