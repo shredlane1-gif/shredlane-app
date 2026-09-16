@@ -942,41 +942,53 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin-bottom:10px">Member Approvals & Data</div>
     <div id="membersList"></div>
     
-    <!-- Admin: Demos -->
-    <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin:18px 0 10px;">Exercise Demos</div>
-    <div class="card">
-      <div class="card-lbl">Upload New Demo</div>
-      <div class="field" style="margin-top:10px;">
-        <label>Exercise Name</label>
-        <input type="text" id="demoName" class="fi" placeholder="e.g. Barbell Squat">
+    <!-- Admin: Demos (collapsible) -->
+    <div class="card" style="margin-top:14px;padding:12px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('demos')">
+        <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Exercise Demos</div>
+        <span id="demosChev" style="color:var(--grn);font-size:14px;font-weight:800">›</span>
       </div>
-      <div class="field">
-        <label>Muscle Group</label>
-        <select id="demoGroup" class="fi fi-sel">
-          <option value="">Select group…</option>
-          <option value="Legs">Legs</option>
-          <option value="Back">Back</option>
-          <option value="Chest">Chest</option>
-          <option value="Shoulders">Shoulders</option>
-          <option value="Arms">Arms</option>
-          <option value="Core">Core</option>
-          <option value="Full Body">Full Body</option>
-          <option value="Cardio">Cardio</option>
-        </select>
+      <div id="demosBody" style="display:none;margin-top:12px">
+        <div class="card-lbl">Upload New Demo</div>
+        <div class="field" style="margin-top:10px;">
+          <label>Exercise Name</label>
+          <input type="text" id="demoName" class="fi" placeholder="e.g. Barbell Squat">
+        </div>
+        <div class="field">
+          <label>Muscle Group</label>
+          <select id="demoGroup" class="fi fi-sel">
+            <option value="">Select group…</option>
+            <option value="Legs">Legs</option>
+            <option value="Back">Back</option>
+            <option value="Chest">Chest</option>
+            <option value="Shoulders">Shoulders</option>
+            <option value="Arms">Arms</option>
+            <option value="Core">Core</option>
+            <option value="Full Body">Full Body</option>
+            <option value="Cardio">Cardio</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Video File (MP4, max 50MB)</label>
+          <input type="file" id="demoFile" accept="video/mp4,video/*" onchange="onDemoFile(this)" style="display:none;">
+          <button class="b-secondary" style="width:100%;" onclick="document.getElementById('demoFile').click()">🎬 Choose Video</button>
+          <div id="demoFileName" style="font-size:12px;color:var(--gry);margin-top:6px;"></div>
+        </div>
+        <button class="b-grn" style="width:100%;margin-top:6px;" onclick="saveDemo()">Upload Demo</button>
+        <div id="adminDemoList" style="margin-top:12px"></div>
       </div>
-      <div class="field">
-        <label>Video File (MP4, max 50MB)</label>
-        <input type="file" id="demoFile" accept="video/mp4,video/*" onchange="onDemoFile(this)" style="display:none;">
-        <button class="b-secondary" style="width:100%;" onclick="document.getElementById('demoFile').click()">🎬 Choose Video</button>
-        <div id="demoFileName" style="font-size:12px;color:var(--gry);margin-top:6px;"></div>
-      </div>
-      <button class="b-grn" style="width:100%;margin-top:6px;" onclick="saveDemo()">Upload Demo</button>
     </div>
-    <div id="adminDemoList"></div>
 
-    <!-- Admin: Member Photos -->
-    <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin:18px 0 10px;">Member Progress Photos</div>
-    <div id="adminPhotoList"></div>
+    <!-- Admin: Member Photos (collapsible) -->
+    <div class="card" style="margin-top:12px;padding:12px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('photos')">
+        <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Member Progress Photos</div>
+        <span id="photosChev" style="color:var(--grn);font-size:14px;font-weight:800">›</span>
+      </div>
+      <div id="photosBody" style="display:none;margin-top:12px">
+        <div id="adminPhotoList"></div>
+      </div>
+    </div>
   </div>
   
 <!-- ═══════════════════════════════════════
@@ -2177,36 +2189,56 @@ function renderAdminRiskAndBulk(){
   }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 
   if(panel){
+    const nlOpen = isAdminSectionOpen('notLogged', notToday.length>0);
+    const naOpen = isAdminSectionOpen('needsAtt', risks.length>0);
     let html = '';
+    // Daily reminder list — only clients with NO check-in today
     html += `<div class="risk-panel" style="border-color:rgba(255,184,0,.4);margin-bottom:10px">
-      <h4 style="color:var(--amb)">Not logged today (${notToday.length}/${approved.length})</h4>
-      ${notToday.length? notToday.slice(0,20).map(u=>`
-        <div class="risk-item"><strong>${escHtml(u.name)}</strong> · ${escHtml(u.email)}
-          <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
-          <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml((u.name||'').split(' ')[0])}, quick reminder from Shredlane — please log today\'s check-in when you can.')">Remind</button>
-        </div>`).join('') : '<div class="risk-item">Everyone approved has logged today ✅</div>'}
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('notLogged')">
+        <h4 style="color:var(--amb);margin:0">Remind: not checked in today (${notToday.length})</h4>
+        <span id="notLoggedChev" style="color:var(--grn);font-weight:800">${nlOpen?'▾':'›'}</span>
+      </div>
+      <div id="notLoggedBody" style="display:${nlOpen?'block':'none'};margin-top:8px">
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Only people who have not logged a check-in today — use Remind to nudge them.</div>
+        ${notToday.length? notToday.map(u=>`
+          <div class="risk-item"><strong>${escHtml(u.name)}</strong>
+            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml((u.name||'').split(' ')[0])}, quick reminder from Shredlane — please log today\'s check-in when you can.')">Remind</button>
+          </div>`).join('') : '<div class="risk-item">Everyone has checked in today ✅</div>'}
+      </div>
     </div>`;
-    if(!risks.length){
-      html += `<div class="risk-panel" style="border-color:rgba(255,214,0,.3)"><h4 style="color:var(--grn)">Needs attention</h4><div class="risk-item">All clear — no at-risk clients right now.</div></div>`;
-    } else {
-      html += `<div class="risk-panel"><h4>Needs attention (${risks.length})</h4>${risks.slice(0,12).map(r=>`
-        <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
-          <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
-          <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml(r.u.name).split(' ')[0]}, checking in from Shredlane — how are you getting on?')">Msg</button>
-        </div>`).join('')}</div>`;
-    }
+    // Longer-term risks
+    html += `<div class="risk-panel" style="border-color:${risks.length?'rgba(255,59,48,.35)':'rgba(255,214,0,.3)'};margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('needsAtt')">
+        <h4 style="color:${risks.length?'var(--red)':'var(--grn)'};margin:0">Needs attention (${risks.length})</h4>
+        <span id="needsAttChev" style="color:var(--grn);font-weight:800">${naOpen?'▾':'›'}</span>
+      </div>
+      <div id="needsAttBody" style="display:${naOpen?'block':'none'};margin-top:8px">
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Missed several days, low adherence, or weight trend up.</div>
+        ${risks.length? risks.slice(0,12).map(r=>`
+          <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
+            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml(r.u.name).split(' ')[0]}, checking in from Shredlane — how are you getting on?')">Msg</button>
+          </div>`).join('') : '<div class="risk-item">All clear right now.</div>'}
+      </div>
+    </div>`;
     panel.innerHTML = html;
   }
   if(bulk){
+    const bOpen = isAdminSectionOpen('bulkMsg', false);
     bulk.style.display='block';
-    bulk.innerHTML = `<div class="card" style="margin:0">
-      <div class="card-lbl">Bulk message (opens WhatsApp per client)</div>
-      <textarea class="fi" id="bulkMsgText" style="min-height:60px" placeholder="Message to all approved clients">Quick reminder from Shredlane — log today's check-in when you can. You've got this.</textarea>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-        <button class="approve-btn" onclick="bulkMessageClients()">Send to all approved</button>
-        <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="coachBackupReminder(true)">Backup tip</button>
+    bulk.innerHTML = `<div class="card" style="margin:0;padding:12px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('bulkMsg')">
+        <div class="card-lbl" style="margin:0">Bulk message</div>
+        <span id="bulkMsgChev" style="color:var(--grn);font-weight:800">${bOpen?'▾':'›'}</span>
       </div>
-      <div style="font-size:11px;color:var(--gry);margin-top:6px">Sends one WhatsApp link at a time for the first 15 clients (phone numbers not stored — uses message text only via wa.me share).</div>
+      <div id="bulkMsgBody" style="display:${bOpen?'block':'none'};margin-top:10px">
+        <textarea class="fi" id="bulkMsgText" style="min-height:60px" placeholder="Message to clients">Quick reminder from Shredlane — log today's check-in when you can.</textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="approve-btn" onclick="bulkMessageClients()">Copy & open WhatsApp</button>
+        </div>
+        <div style="font-size:11px;color:var(--gry);margin-top:6px">Optional. For daily nudges, use <strong>Remind</strong> on the list above instead.</div>
+      </div>
     </div>`;
   }
 }
@@ -3042,21 +3074,31 @@ function isAdminSectionOpen(key, defaultOpen){
   }catch(e){ return !!defaultOpen; }
 }
 function toggleAdminSection(key){
-  const open = !isAdminSectionOpen(key, true);
+  const defaultOpen = (key==='commStats');
+  const open = !isAdminSectionOpen(key, defaultOpen);
   try{ localStorage.setItem('sl_admin_sec_'+key, open?'1':'0'); }catch(e){}
   applyAdminSection(key, open);
-  // programs live inside membersList HTML — re-render admin if programs
   if(key==='programs'){
     try{ renderAdmin(); }catch(e){}
   }
+  if(key==='demos' && open){ try{ renderAdminDemos(); }catch(e){} }
+  if(key==='photos' && open){ try{ renderAdminMemberPhotos(); }catch(e){} }
 }
 function applyAdminSection(key, open){
-  if(key==='commStats'){
-    const body=document.getElementById('commStatsBody');
-    const chev=document.getElementById('commStatsChev');
-    if(body) body.style.display = open ? 'block' : 'none';
-    if(chev) chev.textContent = open ? '▾' : '›';
-  }
+  const map = {
+    commStats: ['commStatsBody','commStatsChev'],
+    demos: ['demosBody','demosChev'],
+    photos: ['photosBody','photosChev'],
+    notLogged: ['notLoggedBody','notLoggedChev'],
+    needsAtt: ['needsAttBody','needsAttChev'],
+    bulkMsg: ['bulkMsgBody','bulkMsgChev']
+  };
+  const ids = map[key];
+  if(!ids) return;
+  const body=document.getElementById(ids[0]);
+  const chev=document.getElementById(ids[1]);
+  if(body) body.style.display = open ? 'block' : 'none';
+  if(chev) chev.textContent = open ? '▾' : '›';
 }
 
 function renderProgramsAdminSection(){
@@ -3772,8 +3814,14 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   }
 
   ml.innerHTML=html;
-  try{ renderAdminDemos(); }catch(e){ console.error(e); }
-  try{ renderAdminMemberPhotos(); }catch(e){ console.error(e); }
+  try{
+    const dOpen = isAdminSectionOpen('demos', false);
+    const pOpen = isAdminSectionOpen('photos', false);
+    applyAdminSection('demos', dOpen);
+    applyAdminSection('photos', pOpen);
+    if(dOpen) renderAdminDemos();
+    if(pOpen) renderAdminMemberPhotos();
+  }catch(e){ console.error(e); }
 });
 
 const approveUser = requireAdmin(async function approveUser(email){
