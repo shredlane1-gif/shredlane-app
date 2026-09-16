@@ -365,6 +365,19 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .goal-cell.miss .gc-v{color:#FF5A5A;text-shadow:none}
 .goal-cell.miss .gc-bar>i{background:#FF5A5A;box-shadow:none}
 
+
+/* Compact admin member rows */
+.mrow{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--dark);border:1px solid var(--bdr);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,background .15s}
+.mrow:active,.mrow.open{border-color:rgba(255,214,0,.45);background:#0c0c00}
+.mrow .mrow-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#000;flex-shrink:0;font-size:14px}
+.mrow .mrow-main{flex:1;min-width:0}
+.mrow .mrow-nm{font-size:14px;font-weight:800;color:var(--wht);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .mrow-meta{font-size:11px;color:var(--gry);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.mrow .mrow-chev{color:var(--grn);font-size:14px;font-weight:800;flex-shrink:0}
+.msearch{width:100%;padding:12px 14px;background:var(--dark2);border:1px solid var(--bdr2);border-radius:10px;color:var(--wht);font-size:14px;margin-bottom:10px;font-family:Barlow,sans-serif}
+.msearch:focus{outline:none;border-color:var(--grn)}
+#adminMemberDetail{margin-top:10px}
+
 /* WORKOUT TRACKER */
 .wkt-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .wkt-title-in{flex:1;padding:12px 13px;background:var(--dark2);border:1.5px solid var(--bdr2);border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--wht)}
@@ -731,6 +744,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
           <button class="trend-tab" onclick="setTrendMetric('waist',this)">Waist</button>
           <button class="trend-tab" onclick="setTrendMetric('steps',this)">Steps</button>
           <button class="trend-tab" onclick="setTrendMetric('sleep',this)">Sleep</button>
+          <button class="trend-tab" onclick="setTrendMetric('water',this)">Water</button>
         </div>
         <div class="chart-area"><svg class="chart-svg" id="trendSVG" viewBox="0 0 300 140" preserveAspectRatio="none"></svg></div>
         <div class="card-lbl" style="margin-bottom:8px;margin-top:4px">Weekly Averages</div>
@@ -862,7 +876,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
-        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Sleep</th><th>Hung</th><th>Pro</th><th>Wkt</th></tr></thead>
+        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Water</th><th>Sleep</th><th>Hung</th><th>Pro</th><th>Wkt</th></tr></thead>
         <tbody id="histBody"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr></tbody></table>
       </div>
     </div>
@@ -1653,6 +1667,29 @@ function updateDateUI(){
   if(btn) btn.textContent = isPast ? '💾 Save Past Entry' : '🔥 Save Check-in';
 }
 
+
+function setCheckinCoachLock(){
+  const form = document.getElementById('scr-checkin');
+  const btn = document.getElementById('saveCIBtn');
+  let note = document.getElementById('ciCoachLockNote');
+  if(!note && form){
+    note = document.createElement('div');
+    note.id = 'ciCoachLockNote';
+    note.style.cssText = 'display:none;background:rgba(255,184,0,.1);border:1px solid rgba(255,184,0,.35);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--amb)';
+    form.insertBefore(note, form.children[1] || form.firstChild);
+  }
+  if(VIEWUSER){
+    if(note){
+      note.style.display = 'block';
+      note.textContent = '👁️ Coach view — you can see '+VIEWUSER.name+'’s check-ins but cannot edit or save them. Only the client can log their own data.';
+    }
+    if(btn){ btn.disabled = true; btn.style.opacity = '0.45'; btn.textContent = '🔒 View only'; }
+  } else {
+    if(note) note.style.display = 'none';
+    if(btn){ btn.disabled = false; btn.style.opacity = ''; }
+  }
+}
+
 function initCI(){
   selectedDate = today();
   updateDateUI();
@@ -1671,6 +1708,7 @@ function initCI(){
   setProtein(null);setWorkout(null);setSleepQual(null);
   waterCount=0;renderWater();
   renderSpeedo(0);
+  try{ setCheckinCoachLock(); }catch(e){}
 }
 
 function onSt(v){const n=parseInt(v)||0;document.getElementById('ciStL').textContent=n.toLocaleString();renderSpeedo(n);}
@@ -1772,7 +1810,7 @@ function renderWater(soft){
   const lbl = document.getElementById('ciWaterL');
   const inp = document.getElementById('waterMlInput');
   const bar = document.getElementById('waterBarFill');
-  const target = (typeof userGoals==='function' && CU) ? userGoals(CU).waterMl : WATER_TARGET_ML;
+  const target = (typeof userGoals==='function') ? userGoals(VIEWUSER||CU).waterMl : WATER_TARGET_ML;
   if(inp && !soft) inp.value = waterCount || 0;
   if(lbl){
     const done = waterCount >= target;
@@ -2185,6 +2223,7 @@ function exportUserWeekPDF(email){
 
 async function saveCI(){
   if(!CU)return;
+  if(VIEWUSER){ toast('🔒 Coach view is read-only — clients log their own check-ins','a'); return; }
   if(CU.status==='pending'){toast('⏳ Your account is awaiting coach approval — check-ins are locked until then.','a');return;}
   const wt=parseDec(document.getElementById('ciWt').value);
   const _waUnit=(typeof userGoals==='function'&&CU)?userGoals(CU).waistUnit:'in';
@@ -3050,7 +3089,11 @@ function renderTrend(){
     return;
   }
   // Get values and dates
-  const vals=ci.map(c=>({date:c.date,v:c[trendMetric]||0})).filter(p=>p.v>0);
+  const vals=ci.map(c=>{
+    let v = c[trendMetric];
+    if(trendMetric==='water') v = waterToMl(c.water||0);
+    return {date:c.date,v:v||0};
+  }).filter(p=>p.v>0);
   if(!vals.length){svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">No data for this metric</text>';return;}
   const minV=Math.min(...vals.map(p=>p.v)), maxV=Math.max(...vals.map(p=>p.v));
   const range=maxV-minV||1;
@@ -3094,7 +3137,8 @@ function renderTrend(){
     const dayN=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
     const wk='W'+(dayN+1);
     if(!weeks[wk])weeks[wk]=[];
-    const v=c[trendMetric];
+    let v=c[trendMetric];
+    if(trendMetric==='water') v = waterToMl(c.water||0);
     if(v)weeks[wk].push(v);
   });
   const wkKeys=Object.keys(weeks).slice(0,12);
@@ -3107,7 +3151,7 @@ function renderTrend(){
     const clr=diff===null?'var(--gry)':parseFloat(diff)<0?(isGoodDown?'var(--grn)':'var(--red)'):(isGoodDown?'var(--red)':'var(--grn)');
     return `<div class="wk-chip">
       <div class="wk-n">${wk}</div>
-      <div class="wk-v">${avg.toFixed(1)}</div>
+      <div class="wk-v">${trendMetric==='water' ? formatWater(Math.round(avg)) : avg.toFixed(1)}</div>
       <div class="wk-d" style="color:${clr}">${diff!==null?(parseFloat(diff)>0?'+':'')+diff:'base'}</div>
     </div>`;
   }).join('');
@@ -3330,6 +3374,49 @@ function calcStreak(ci){
 function renderHistory(){
   const u=VIEWUSER||CU;
   const ci=[...myCI()].sort((a,b)=>a.date.localeCompare(b.date));
+  // Weekly water summary (last 7 days)
+  let waterWrap = document.getElementById('histWaterWeek');
+  if(!waterWrap){
+    const host = document.getElementById('scr-history');
+    if(host){
+      waterWrap = document.createElement('div');
+      waterWrap.id = 'histWaterWeek';
+      const sub = host.querySelector('.scr-sub');
+      if(sub && sub.nextSibling) host.insertBefore(waterWrap, sub.nextSibling);
+      else host.insertBefore(waterWrap, host.children[1]||null);
+    }
+  }
+  if(waterWrap){
+    const start = new Date(); start.setDate(start.getDate()-6);
+    const startStr = start.toISOString().slice(0,10);
+    const week = ci.filter(c=>c && c.date>=startStr);
+    const withW = week.map(c=>({date:c.date, ml: waterToMl(c.water||0)})).filter(x=>x.ml>0);
+    const target = (typeof userGoals==='function' ? userGoals(u).waterMl : 3000);
+    if(!withW.length){
+      waterWrap.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="card-lbl">💧 Water — last 7 days</div><div style="font-size:13px;color:var(--gry)">No water logged this week yet.</div></div>`;
+    } else {
+      const total = withW.reduce((s,x)=>s+x.ml,0);
+      const avg = Math.round(total / withW.length);
+      const daysHit = withW.filter(x=>x.ml>=target).length;
+      const chips = withW.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>{
+        const ok = x.ml >= target;
+        return `<div style="background:#000;border:1px solid ${ok?'rgba(255,214,0,.45)':'#333'};border-radius:10px;padding:8px 10px;min-width:72px;text-align:center">
+          <div style="font-size:9px;font-weight:800;color:#888;text-transform:uppercase">${x.date.slice(5)}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:${ok?'#FFD600':'#FFB800'}">${formatWater(x.ml)}</div>
+        </div>`;
+      }).join('');
+      waterWrap.innerHTML = `<div class="card" style="margin-bottom:12px">
+        <div class="card-lbl">💧 Water — last 7 days</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Avg / day</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${formatWater(avg)}</div></div>
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Days logged</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${withW.length}/7</div></div>
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Hit target</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${daysHit}</div></div>
+        </div>
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${chips}</div>
+        <div style="font-size:11px;color:var(--gry);margin-top:8px">Target ${formatWater(target)} / day · set by coach</div>
+      </div>`;
+    }
+  }
   // Total lost banner
   const banner=document.getElementById('tlBanner');
   const tlMain=document.getElementById('tlMain');
@@ -3365,10 +3452,13 @@ function renderHistory(){
     const wktTxt=c.workout===true?'✓':c.workout===false?'✗':'—';
     const sqLabels=['😴','😐','🙂','😁'];
     const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
+    const wMl = (c.water!=null && c.water!=='') ? waterToMl(c.water) : null;
+    const wTxt = wMl!=null ? formatWater(wMl) : '—';
     return `<tr>
       <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
       <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
       <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
+      <td style="color:var(--grn);font-size:11px;font-weight:700">${wTxt}</td>
       <td>${c.sleep??'—'} ${sqTxt}</td><td>${c.hunger??'—'}</td>
       <td style="color:${proClr}">${proTxt}</td>
       <td style="color:${wktClr}">${wktTxt}</td>
@@ -3430,6 +3520,25 @@ async function generateDemoCheckins(){
   renderDash(); renderHistory();
 }
 
+
+window._adminOpenEmail = window._adminOpenEmail || null;
+window._adminMemberQ = window._adminMemberQ || '';
+function toggleAdminMember(email){
+  window._adminOpenEmail = (window._adminOpenEmail === email) ? null : email;
+  try{ renderAdmin(); }catch(e){ console.error(e); }
+  // scroll detail into view after re-render
+  setTimeout(()=>{
+    const el=document.getElementById('adminMemberDetail');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }, 50);
+}
+function filterAdminMembers(q){
+  window._adminMemberQ = q || '';
+  try{ renderAdmin(); }catch(e){}
+  const inp=document.getElementById('adminMemberSearch');
+  if(inp){ inp.focus(); const v=inp.value; inp.value=''; inp.value=v; }
+}
+
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
   try{ renderAdminRiskAndBulk(); coachBackupReminder(false); }catch(e){ console.error(e); }
@@ -3471,54 +3580,74 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     return;
   }
 
-  function memberCard(u,i){
+  function memberMeta(u){
+    const raw=d.checkins[u.email];
+    const ci=(Array.isArray(raw)?raw:[]).filter(e=>e&&e.date);
+    const streak=calcStreak(ci);
+    const last=ci.length?ci.reduce((a,b)=>a.date>b.date?a:b):null;
+    const wkRaw=Array.isArray(d.workouts[u.email])?d.workouts[u.email]:[];
+    const lastCi=last;
+    const lastW=wkRaw.length?wkRaw.reduce((a,b)=>a.date>b.date?a:b):null;
+    const lastAct=lastCi&&lastW?(lastCi.date>=lastW.date?lastCi.date:lastW.date):(lastCi?lastCi.date:lastW?lastW.date:null);
+    const weekAgoStr=(function(){const x=new Date();x.setDate(x.getDate()-7);return x.toISOString().slice(0,10);})();
+    const isInactive=u.status!=='pending'&&(!lastAct||lastAct<weekAgoStr);
+    return {ci,streak,last,lastAct,isInactive,adh:adherencePct(u,14)};
+  }
+
+  function memberRow(u,i){
     try{
-      const raw=d.checkins[u.email];
-      const ci=(Array.isArray(raw)?raw:[]).filter(e=>e&&e.date);
-      const streak=calcStreak(ci);
-      const last=ci.length?ci.reduce((a,b)=>a.date>b.date?a:b):null;
+      const meta=memberMeta(u);
       const col=COLORS[i%COLORS.length];
+      const isPend=u.status==='pending';
+      const open = (window._adminOpenEmail===u.email);
+      const tip = isPend ? 'Pending approval' : ((meta.lastAct?('Last active '+meta.lastAct):'No activity')+' · '+meta.ci.length+' CI · '+meta.adh+'% adh');
+      return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
+        <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
+        <div class="mrow-main">
+          <div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}</div>
+          <div class="mrow-meta">${escHtml(u.email)} · ${tip}</div>
+        </div>
+        <span class="bdg ${isPend?'bdg-pend':meta.ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':meta.ci.length?'Active':'Approved'}</span>
+        <span class="mrow-chev">${open?'▾':'›'}</span>
+      </div>
+      ${open?memberDetail(u,i):''}`;
+    }catch(err){
+      console.error(err);
+      return `<div class="mrow"><div class="mrow-nm">${escHtml(u.email)}</div></div>`;
+    }
+  }
+
+  function memberDetail(u,i){
+    try{
+      const meta=memberMeta(u);
+      const {ci,streak,last,lastAct}=meta;
       const isPend=u.status==='pending';
       const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
       const waDiff=last&&u.baseWaist!=null?(last.waist-u.baseWaist).toFixed(1):null;
       const progOptions=allPrograms().map(p=>`<option value="${p.id}" ${u.programId===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
-      const wkRaw=Array.isArray(d.workouts[u.email])?d.workouts[u.email]:[];
-      const lastCi=ci.length?ci.reduce((a,b)=>a.date>b.date?a:b):null;
-      const lastW=wkRaw.length?wkRaw.reduce((a,b)=>a.date>b.date?a:b):null;
-      const lastAct=lastCi&&lastW?(lastCi.date>=lastW.date?lastCi.date:lastW.date):(lastCi?lastCi.date:lastW?lastW.date:null);
-      const weekAgoStr=(function(){const x=new Date();x.setDate(x.getDate()-7);return x.toISOString().slice(0,10);})();
-      const isInactive=!isPend&&(!lastAct||lastAct<weekAgoStr);
-      return `<div class="mc">
-        <div class="mc-top">
-          <div class="mc-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
-          <div style="flex:1">
-            <div class="mc-nm">${escHtml(u.name)}${isInactive?'<span class="inactive-badge">INACTIVE 7d+</span>':''}</div>
-            <div class="mc-em">${escHtml(u.email)} · ${escHtml(u.goal)||'—'}</div>
-            ${u.baseWeight!=null?`<div class="mc-em" style="color:var(--grn3)">Baseline: ${u.baseWeight}kg · ${u.baseWaist}in</div>`:''}
-            <div class="mc-em" style="color:var(--gry)">Joined ${escHtml(u.joined)||'—'}${lastAct?' · Last active '+lastAct:''}</div>
-          </div>
-          <span class="bdg ${isPend?'bdg-pend':ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':ci.length?'Active':'Approved'}</span>
-        </div>
-        ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program:</span>
+      const id=u.email.replace(/[^a-zA-Z0-9]/g,'_');
+      return `<div class="mc" id="adminMemberDetail" style="margin-top:0;margin-bottom:12px;border-color:rgba(255,214,0,.35)" onclick="event.stopPropagation()">
+        <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Joined ${escHtml(u.joined)||'—'} · Goal: ${escHtml(u.goal)||'—'}${u.baseWeight!=null?` · Baseline ${u.baseWeight}kg / ${u.baseWaist}in`:''}</div>
+        ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program</span>
           <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)">
             <option value="">— None —</option>
             ${progOptions}
           </select>
         </div>`:''}
-        ${!isPend?`<div style="margin-top:8px">
-          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note (shown on their dashboard)</div>
-          <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${u.email.replace(/[^a-zA-Z0-9]/g,'_')}" placeholder="e.g. Focus on form this week — great consistency!">${escHtml(u.coachNote||'')}</textarea>
+        ${!isPend?`<div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
+          <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}" placeholder="Note shown on their dashboard">${escHtml(u.coachNote||'')}</textarea>
           <button class="approve-btn" style="margin-top:6px;padding:6px 12px;font-size:11px" onclick="saveCoachNote('${u.email}')">Save note</button>
         </div>`:''}
-        ${!isPend?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)">
-          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">🎯 Daily targets (coach sets these)</div>
+        ${!isPend?`<div style="margin-bottom:10px;padding-top:8px;border-top:1px solid var(--bdr)">
+          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">🎯 Daily targets</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${u.email.replace(/[^a-zA-Z0-9]/g,'_')}" type="number" value="${u.waterTargetMl||3000}"></div>
-            <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${u.email.replace(/[^a-zA-Z0-9]/g,'_')}" type="number" value="${u.stepsTarget||10000}"></div>
-            <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${u.email.replace(/[^a-zA-Z0-9]/g,'_')}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
+            <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
+            <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
+            <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
             <div><div class="fl" style="font-size:10px">Waist unit</div>
-              <select class="fi" style="font-size:12px;padding:8px" id="tgU-${u.email.replace(/[^a-zA-Z0-9]/g,'_')}">
+              <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}">
                 <option value="in" ${(u.waistUnit||'in')==='in'?'selected':''}>Inches</option>
                 <option value="cm" ${u.waistUnit==='cm'?'selected':''}>Centimetres</option>
               </select>
@@ -3526,49 +3655,58 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           </div>
           <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
         </div>`:''}
-        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
           ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
-          ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF Report</button>`:''}
+          ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF</button>`:''}
           ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
           ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
           <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'🗑️ Remove'}</button>
         </div>
         ${!isPend?`<div class="mc-stats">
           <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
-          <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak 🔥</div></div>
+          <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak</div></div>
           <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
-          <div class="mcs"><div class="mcsv" style="color:${adherencePct(u,14)<40?'var(--red)':'var(--grn)'}">${adherencePct(u,14)}%</div><div class="mcsl">Adh 14d</div></div>
+          <div class="mcs"><div class="mcsv" style="color:${meta.adh<40?'var(--red)':'var(--grn)'}">${meta.adh}%</div><div class="mcsl">Adh 14d</div></div>
         </div>`:''}
         ${last&&!isPend?`<div class="mc-last">
-          Last: ${escHtml(last.date)} · Wt: <strong style="color:${wDiff&&parseFloat(wDiff)<0?'var(--grn)':'var(--red)'}">${last.weight}kg${wDiff!==null?' ('+(parseFloat(wDiff)>0?'+':'')+wDiff+'kg)':''}</strong> · Waist: <strong style="color:${waDiff&&parseFloat(waDiff)<0?'var(--grn)':'var(--red)'}">${last.waist}in${waDiff!==null?' ('+(parseFloat(waDiff)>0?'+':'')+waDiff+'in)':''}</strong> · Steps: ${(last.steps||0).toLocaleString()} · Sleep: ${escHtml(last.sleep)}h · Hunger: ${escHtml(last.hunger)}/10
-          ${last.notes?`<br><em style="color:var(--gry2);font-style:italic">"${escHtml(last.notes)}"</em>`:''}
+          Last: ${escHtml(last.date)} · Wt: <strong>${last.weight}kg${wDiff!==null?' ('+(parseFloat(wDiff)>0?'+':'')+wDiff+')':''}</strong> · Waist: <strong>${last.waist}in</strong> · Steps: ${(last.steps||0).toLocaleString()} · Water: ${last.water!=null?formatWater(waterToMl(last.water)):'—'}
+          ${last.notes?`<br><em style="color:var(--gry2)">"${escHtml(last.notes)}"</em>`:''}
         </div>`:''}
       </div>`;
-    }catch(err){
-      console.error('Card error for',u.email,err);
-      return `<div class="mc" style="border:1px solid var(--red);padding:12px"><div class="mc-nm">${escHtml(u.name)}</div><div class="mc-em" style="color:var(--red)">${escHtml(u.email)} — data error</div></div>`;
+    }catch(e){
+      console.error(e);
+      return '<div class="mc">Could not load details</div>';
     }
   }
 
   let html='';
-
   html+=renderProgramsAdminSection();
 
+  html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search clients by name or email…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
+
+  const q=(window._adminMemberQ||'').toLowerCase().trim();
+  function matchQ(u){
+    if(!q) return true;
+    return (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q);
+  }
+  const pendingF=pending.filter(matchQ);
+  const approvedF=approved.filter(matchQ);
+
   if(pending.length){
-    html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--amb);margin:12px 0 8px;padding:8px 12px;background:rgba(255,184,0,.08);border-left:3px solid var(--amb);border-radius:4px">⏳ Pending Approval (${pending.length})</div>`;
-    html+=pending.map((u,i)=>memberCard(u,i)).join('');
+    html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--amb);margin:12px 0 8px;padding:8px 12px;background:rgba(255,184,0,.08);border-left:3px solid var(--amb);border-radius:4px">⏳ Pending (${pendingF.length}/${pending.length})</div>`;
+    html+=pendingF.length?pendingF.map((u,i)=>memberRow(u,i)).join(''):'<div style="font-size:12px;color:var(--gry);padding:6px 0">No matches</div>';
   } else {
     html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0 4px">✅ No pending join requests</div>`;
   }
 
-  html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(255,214,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Approved Members (${approved.length})</div>`;
-  if(approved.length){
-    html+=approved.map((u,i)=>memberCard(u,pending.length+i)).join('');
+  html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(255,214,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Members (${approvedF.length}/${approved.length}) · tap a name</div>`;
+  if(approvedF.length){
+    html+=approvedF.map((u,i)=>memberRow(u,pending.length+i)).join('');
   } else {
-    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0">No approved members yet</div>`;
+    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0">${approved.length?'No matches':'No approved members yet'}</div>`;
   }
 
   ml.innerHTML=html;
