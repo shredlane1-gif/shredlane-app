@@ -2203,7 +2203,7 @@ function renderAdminRiskAndBulk(){
         ${notToday.length? notToday.map(u=>`
           <div class="risk-item"><strong>${escHtml(u.name)}</strong>
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml((u.name||'').split(' ')[0])}, quick reminder from Shredlane — please log today\'s check-in when you can.')">Remind</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();remindClient('${(u.name||'').split(' ')[0].replace(/'/g,'')}');">Remind</button>
           </div>`).join('') : '<div class="risk-item">Everyone has checked in today ✅</div>'}
       </div>
     </div>`;
@@ -2218,7 +2218,7 @@ function renderAdminRiskAndBulk(){
         ${risks.length? risks.slice(0,12).map(r=>`
           <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="messageCoach('Hi ${escHtml(r.u.name).split(' ')[0]}, checking in from Shredlane — how are you getting on?')">Msg</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(r.u.name||'').split(' ')[0].replace(/'/g,'')}');">Msg</button>
           </div>`).join('') : '<div class="risk-item">All clear right now.</div>'}
       </div>
     </div>`;
@@ -4462,8 +4462,33 @@ function enableReminders(){
 
 // WhatsApp coach link
 function messageCoach(text){
+  // Clients → coach WhatsApp
   const msg=encodeURIComponent(text||'Hi coach — quick update from Shredlane');
   window.open('https://wa.me/254705671119?text='+msg,'_blank');
+}
+function remindClient(firstName, evt){
+  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
+  const name = (firstName||'there').trim() || 'there';
+  const text = 'Hi '+name+', quick reminder from Shredlane — please log today\'s check-in when you can. You\'ve got this.';
+  const msg = encodeURIComponent(text);
+  try{ navigator.clipboard.writeText(text); }catch(e){}
+  // No fixed phone number — WhatsApp lets you pick the client contact
+  const w = window.open('https://wa.me/?text='+msg, '_blank');
+  if(!w){
+    toast('Allow pop-ups, or paste the reminder from clipboard in WhatsApp','a');
+  } else {
+    toast('WhatsApp opened — pick '+name+' and send. Message also copied.','g');
+  }
+}
+function messageClientCheckIn(firstName, evt){
+  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
+  const name = (firstName||'there').trim() || 'there';
+  const text = 'Hi '+name+', checking in from Shredlane — how are you getting on?';
+  const msg = encodeURIComponent(text);
+  try{ navigator.clipboard.writeText(text); }catch(e){}
+  const w = window.open('https://wa.me/?text='+msg, '_blank');
+  if(!w) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
+  else toast('WhatsApp opened — pick '+name+' and send','g');
 }
 
 // Share progress image
