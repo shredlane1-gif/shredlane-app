@@ -510,6 +510,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(60)">60s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(90)">90s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(120)">2m</button>
+    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="extendRestTimer(30)">+30s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="stopRestTimer()">✕</button>
   </div>
 </div>
@@ -603,6 +604,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="aform" id="af-register">
       <div class="field"><label>Full Name</label><input class="fi" type="text" id="rNm" placeholder="Your full name" autocomplete="name"></div>
       <div class="field"><label>Email</label><input class="fi" type="email" id="rEm" placeholder="your@email.com" inputmode="email" autocomplete="email"></div>
+      <div class="field"><label>WhatsApp phone (optional)</label><input class="fi" type="tel" id="rPhone" placeholder="e.g. 0712 345 678" inputmode="tel" autocomplete="tel"><div style="font-size:11px;color:var(--gry);margin-top:4px">So your coach can message you directly</div></div>
       <div class="field"><label>Create Password</label><input class="fi" type="password" id="rPw" placeholder="Minimum 6 characters" autocomplete="new-password"></div>
       <div class="field"><label>Confirm Password</label><input class="fi" type="password" id="rCf" placeholder="Repeat password" autocomplete="new-password"></div>
       <div class="fi-row">
@@ -1393,6 +1395,7 @@ async function doRegister(){
   const pw=(document.getElementById('rPw').value||'');
   const cf=(document.getElementById('rCf').value||'');
   const gl=document.getElementById('rGl').value;
+  const phoneRaw=(document.getElementById('rPhone')||{}).value||'';
   const wt=parseFloat(document.getElementById('rWt').value);
   const wa=parseFloat(document.getElementById('rWa').value);
   const err=document.getElementById('rErr');
@@ -1411,7 +1414,8 @@ async function doRegister(){
   if(btn){btn.textContent='Creating account…';btn.disabled=true;}
   try{
     await firebase.auth().createUserWithEmailAndPassword(em,pw);
-    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,role:'member',status:'pending',joined:today()};
+    const phone=normalizePhone(phoneRaw);
+    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,phone:phone||null,role:'member',status:'pending',joined:today()};
     await fdb.collection('users').doc(em).set(user);
     CACHE.users[em]=user;
     await firebase.auth().signOut();
@@ -2188,6 +2192,19 @@ function renderAdminRiskAndBulk(){
     return !ci.some(c=>c && c.date===tday);
   }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 
+  // Sunday photo compliance: last 7 days including most recent Sunday
+  function mostRecentSunday(){
+    const x=new Date(); const day=x.getDay(); // 0 Sun
+    x.setDate(x.getDate()-day);
+    return x.toISOString().slice(0,10);
+  }
+  const sun = mostRecentSunday();
+  const photoMiss = approved.filter(u=>{
+    const raw = d.photos[u.email];
+    const list = Array.isArray(raw)?raw:[];
+    return !list.some(e=>e && e.date >= sun);
+  }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
   if(panel){
     const nlOpen = isAdminSectionOpen('notLogged', notToday.length>0);
     const naOpen = isAdminSectionOpen('needsAtt', risks.length>0);
@@ -2199,12 +2216,31 @@ function renderAdminRiskAndBulk(){
         <span id="notLoggedChev" style="color:var(--grn);font-weight:800">${nlOpen?'▾':'›'}</span>
       </div>
       <div id="notLoggedBody" style="display:${nlOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Only people who have not logged a check-in today — use Remind to nudge them.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <div style="font-size:11px;color:var(--gry)">Only clients with no check-in today</div>
+          ${notToday.length?`<button class="approve-btn" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();remindAllNotLogged()">Remind all (${notToday.length})</button>`:''}
+        </div>
         ${notToday.length? notToday.map(u=>`
           <div class="risk-item"><strong>${escHtml(u.name)}</strong>
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();remindClient('${(u.name||'').split(' ')[0].replace(/'/g,'')}');">Remind</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();remindClient('${(u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${u.email}');">Remind</button>
           </div>`).join('') : '<div class="risk-item">Everyone has checked in today ✅</div>'}
+      </div>
+    </div>`;
+    // Photo miss this week (since Sunday)
+    const phOpen = isAdminSectionOpen('photoMiss', false);
+    html += `<div class="risk-panel" style="border-color:rgba(255,214,0,.35);margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('photoMiss')">
+        <h4 style="color:var(--grn);margin:0">Photos due (since Sun) (${photoMiss.length})</h4>
+        <span id="photoMissChev" style="color:var(--grn);font-weight:800">${phOpen?'▾':'›'}</span>
+      </div>
+      <div id="photoMissBody" style="display:${phOpen?'block':'none'};margin-top:8px">
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No progress photo set since ${sun}.</div>
+        ${photoMiss.length? photoMiss.slice(0,15).map(u=>`
+          <div class="risk-item"><strong>${escHtml(u.name)}</strong>
+            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="event.stopPropagation();viewMemberPhotos('${u.email}')">Photos</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${u.email}')">Msg</button>
+          </div>`).join('') : '<div class="risk-item">All approved clients have a photo set this week ✅</div>'}
       </div>
     </div>`;
     // Longer-term risks
@@ -2218,7 +2254,7 @@ function renderAdminRiskAndBulk(){
         ${risks.length? risks.slice(0,12).map(r=>`
           <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(r.u.name||'').split(' ')[0].replace(/'/g,'')}');">Msg</button>
+            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(r.u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${r.u.email}');">Msg</button>
           </div>`).join('') : '<div class="risk-item">All clear right now.</div>'}
       </div>
     </div>`;
@@ -2309,7 +2345,7 @@ async function saveCI(){
     await ref.set({entries:list});
     if(!CACHE.checkins)CACHE.checkins={};
     CACHE.checkins[CU.email]=list;
-    if(offline) toast('💾 Offline: check-in queued on this phone — will sync when online','g');
+    if(offline) toast('💾 OFFLINE — check-in saved on this phone. Will sync when you are back online.','a');
     else toast('🔥 Check-in saved!','g');
     renderDash(); renderHistory();
   }catch(e){
@@ -2417,7 +2453,7 @@ function renderExerciseBuilder(){
     return `
     <div class="ex-card">
       <div class="ex-hdr">
-        <input class="ex-name-in" placeholder="Exercise name (e.g. Bench Press)" value="${escAttr(ex.name)}" oninput="updateExName(${ei},this.value);renderExerciseBuilder()" aria-label="Exercise name">
+        <input class="ex-name-in" placeholder="Exercise name (e.g. Bench Press)" value="${escAttr(ex.name)}" oninput="updateExName(${ei},this.value)" onchange="renderExerciseBuilder()" aria-label="Exercise name">
         <button class="ex-del" onclick="removeExercise(${ei})" title="Remove exercise" aria-label="Remove exercise">✕</button>
       </div>
       ${prev?`<div class="prev-perf">Last (${prev.date.slice(5)}): ${escHtml(prev.sets)}</div>`:''}
@@ -2443,7 +2479,35 @@ function escAttr(v){return (v==null?'':String(v)).replace(/&/g,'&amp;').replace(
 
 function addExercise(){wktBuilder.exercises.push(newExercise());renderExerciseBuilder();}
 function removeExercise(ei){wktBuilder.exercises.splice(ei,1);renderExerciseBuilder();}
-function updateExName(ei,v){if(wktBuilder.exercises[ei])wktBuilder.exercises[ei].name=v;}
+
+function lastPerformanceForExercise(exName){
+  const key = normalizeExName(exName);
+  if(!key) return null;
+  const list = [...myWorkouts()].sort((a,b)=>b.date.localeCompare(a.date));
+  for(const w of list){
+    for(const ex of (w.exercises||[])){
+      if(normalizeExName(ex.name)!==key) continue;
+      const sets = (ex.sets||[]).filter(s=>s && (s.weight!=null && s.weight!=='' || s.reps!=null && s.reps!==''));
+      if(sets.length) return sets.map(s=>({reps:s.reps??'', weight:s.weight??''}));
+    }
+  }
+  return null;
+}
+function updateExName(ei,v){
+  if(!wktBuilder.exercises[ei]) return;
+  wktBuilder.exercises[ei].name=v;
+  // Auto-fill previous session sets when name is typed and sets are still empty
+  const ex = wktBuilder.exercises[ei];
+  const empty = !(ex.sets||[]).some(s=> (s.reps!==''&&s.reps!=null) || (s.weight!==''&&s.weight!=null));
+  if(empty && v && v.trim().length>=3){
+    const prev = lastPerformanceForExercise(v);
+    if(prev && prev.length){
+      ex.sets = prev.map(s=>({reps:s.reps, weight:s.weight}));
+      try{ renderExerciseBuilder(); }catch(e){}
+      toast('Pre-filled last session for '+v.trim(),'g');
+    }
+  }
+}
 function updateSet(ei,si,field,v){const ex=wktBuilder.exercises[ei];if(!ex||!ex.sets[si])return;ex.sets[si][field]=v;}
 function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:''});renderExerciseBuilder();}
 function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:''});renderExerciseBuilder();}
@@ -2586,7 +2650,7 @@ async function saveWorkout(){
     // PR detection vs history before this save
     const prior = (list||[]).filter(w=>w && w.id!==entry.id);
     const prs = detectPRs(entry, prior);
-    if(offline) toast('💾 Offline: workout queued — will sync when online','g');
+    if(offline) toast('💾 OFFLINE — workout saved on this phone. Will sync when you are back online.','a');
     else if(prs.length){
       const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
       toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
@@ -2847,36 +2911,12 @@ function myAssignedProgramState(){
 
 async function assignProgramToUser(email,programId){
   try{
-    await fdb.collection('users').doc(email).set({programId:programId||null},{merge:true});
-    if(CACHE.users[email])CACHE.users[email].programId=programId||null;
+    await fdb.collection('users').doc(email).set({programId:programId||null, programStartDate: programId?today():null},{merge:true});
+    if(CACHE.users[email]){ CACHE.users[email].programId=programId||null; CACHE.users[email].programStartDate=programId?today():null; }
     toast(programId?'📋 Program assigned':'Program unassigned','g');
     renderProgramScreen();
     renderAdmin();
   }catch(e){console.error(e);toast('⚠️ Could not update — check connection','r');}
-}
-
-
-async function saveCoachTargets(email){
-  if(!CU || CU.role!=='admin'){ toast('Admin only','r'); return; }
-  const id = email.replace(/[^a-zA-Z0-9]/g,'_');
-  const w = parseInt((document.getElementById('tgW-'+id)||{}).value,10);
-  const s = parseInt((document.getElementById('tgS-'+id)||{}).value,10);
-  const sl = parseFloat((document.getElementById('tgSl-'+id)||{}).value);
-  const unit = (document.getElementById('tgU-'+id)||{}).value || 'in';
-  const patch = {
-    waterTargetMl: isNaN(w) ? 3000 : Math.max(500, w),
-    stepsTarget: isNaN(s) ? 10000 : Math.max(1000, s),
-    sleepTarget: isNaN(sl) ? 7 : Math.max(4, sl),
-    waistUnit: unit === 'cm' ? 'cm' : 'in'
-  };
-  try{
-    await fdb.collection('users').doc(email).set(patch, {merge:true});
-    if(CACHE.users[email]) Object.assign(CACHE.users[email], patch);
-    toast('🎯 Targets saved for '+email,'g');
-  }catch(e){
-    console.error(e);
-    toast('Could not save targets','r');
-  }
 }
 
 async function saveCoachNote(email){
@@ -2885,8 +2925,9 @@ async function saveCoachNote(email){
   const el=document.getElementById(id);
   const note=el?(el.value||'').trim():'';
   try{
-    await fdb.collection('users').doc(email).set({coachNote:note||null},{merge:true});
-    if(CACHE.users[email])CACHE.users[email].coachNote=note||null;
+    const payload={coachNote:note||null, coachNoteAt: note?Date.now():null};
+    await fdb.collection('users').doc(email).set(payload,{merge:true});
+    if(CACHE.users[email]){ CACHE.users[email].coachNote=note||null; CACHE.users[email].coachNoteAt=payload.coachNoteAt; }
     toast(note?'💬 Note saved':'Note cleared','g');
   }catch(e){console.error(e);toast('⚠️ Could not save note','r');}
 }
@@ -2931,10 +2972,7 @@ function renderProgramScreen(){
           <div class="prog-day-mini">
             <div class="prog-day-mini-hdr">
               <div class="prog-day-mini-nm">${escHtml(d.name)}</div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <label class="day-check" style="border:none;padding:0;margin:0;gap:6px;font-size:11px;color:var(--gry)"><input type="checkbox" ${getProgDayDone(u.email)[mine.id+'_'+d.id]?'checked':''} onchange="toggleProgDayDone('${u.email}','${mine.id}_${d.id}',this)"> Done</label>
-                <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px" onclick="startWorkoutFromProgramDay('${mine.id}','${d.id}')">▶ Log this day</button>
-              </div>
+              <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px" onclick="startWorkoutFromProgramDay('${mine.id}','${d.id}')">▶ Log this day</button>
             </div>
             ${(d.exercises||[]).map(ex=>{const demo=findDemoForExercise(ex.name);return `<div class="prog-ex-mini-row"><span class="prog-ex-mini-nm">${escHtml(ex.name)}</span><span style="display:flex;align-items:center;gap:8px;"><span class="prog-ex-mini-tgt">${ex.targetSets||'—'}×${escHtml(ex.targetReps||'—')}</span>${demo?`<button class="b-secondary" style="padding:4px 10px;font-size:10px;border-radius:6px;" onclick="playDemoVideo('${demo.id}')">▶ Demo</button>`:''}</span></div>`;}).join('')||'<div style="font-size:11px;color:var(--gry2)">No exercises listed</div>'}
           </div>`).join('')||'<div style="font-size:12px;color:var(--gry)">This program has no days yet.</div>'}
@@ -3066,57 +3104,12 @@ function renderProgramBuilder(){
   </div>`;
 }
 
-function isAdminSectionOpen(key, defaultOpen){
-  try{
-    const v = localStorage.getItem('sl_admin_sec_'+key);
-    if(v===null) return !!defaultOpen;
-    return v==='1';
-  }catch(e){ return !!defaultOpen; }
-}
-function toggleAdminSection(key){
-  const defaultOpen = (key==='commStats');
-  const open = !isAdminSectionOpen(key, defaultOpen);
-  try{ localStorage.setItem('sl_admin_sec_'+key, open?'1':'0'); }catch(e){}
-  applyAdminSection(key, open);
-  if(key==='programs'){
-    try{ renderAdmin(); }catch(e){}
-  }
-  if(key==='demos' && open){ try{ renderAdminDemos(); }catch(e){} }
-  if(key==='photos' && open){ try{ renderAdminMemberPhotos(); }catch(e){} }
-}
-function applyAdminSection(key, open){
-  const map = {
-    commStats: ['commStatsBody','commStatsChev'],
-    demos: ['demosBody','demosChev'],
-    photos: ['photosBody','photosChev'],
-    notLogged: ['notLoggedBody','notLoggedChev'],
-    needsAtt: ['needsAttBody','needsAttChev'],
-    bulkMsg: ['bulkMsgBody','bulkMsgChev']
-  };
-  const ids = map[key];
-  if(!ids) return;
-  const body=document.getElementById(ids[0]);
-  const chev=document.getElementById(ids[1]);
-  if(body) body.style.display = open ? 'block' : 'none';
-  if(chev) chev.textContent = open ? '▾' : '›';
-}
-
 function renderProgramsAdminSection(){
   const list=allPrograms();
-  const open = isAdminSectionOpen('programs', false) || !!(progBuilder && progBuilder._open);
-  let html=`<div class="card" style="margin:12px 0;padding:12px 14px">
-    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('programs')">
-      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Workout Programs <span style="color:var(--gry);font-weight:600;text-transform:none;letter-spacing:0">(${list.length})</span></div>
-      <span style="color:var(--grn);font-size:14px;font-weight:800">${open?'▾':'›'}</span>
-    </div>`;
-  if(!open){
-    html+=`</div>`;
-    return html;
-  }
-  html+=`<div style="margin-top:12px">`;
+  let html=`<div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin:20px 0 10px">Workout Programs</div>`;
   html+= (progBuilder._open?renderProgramBuilder():`<button class="add-prog-day-btn" style="margin-bottom:14px" onclick="openProgramBuilderNew()">＋ New Program</button>`);
   if(!list.length && !progBuilder._open){
-    html+=`<div style="font-size:12px;color:var(--gry);padding:6px 0 4px">No programs yet — create one above.</div>`;
+    html+=`<div style="font-size:12px;color:var(--gry);padding:6px 0 14px">No programs yet — create one above.</div>`;
   } else {
     html+=list.map(p=>{
       const assignedCount=Object.values(gDB().users).filter(u=>u.programId===p.id).length;
@@ -3135,7 +3128,6 @@ function renderProgramsAdminSection(){
       </div>`;
     }).join('');
   }
-  html+=`</div></div>`;
   return html;
 }
 
@@ -3156,7 +3148,7 @@ function renderSpeedo(steps){
   const la=deg>180?1:0;
   const arc=document.getElementById('sArc'),ndl=document.getElementById('sNeedle');
   const num=document.getElementById('sNum'),st=document.getElementById('sStatus');
-  if(arc){if(steps>0){arc.setAttribute('d',`M 22 138 A 103 103 0 ${la} 1 ${ex} ${ey}`);arc.setAttribute('stroke',steps>=10000?'#FFD600':'#FF3B30');}else arc.setAttribute('d','M 22 138 A 103 103 0 0 1 22 138');}
+  if(arc){if(steps>0){arc.setAttribute('d',`M 22 138 A 103 103 0 ${la} 1 ${ex} ${ey}`);arc.setAttribute('stroke',steps>=10000?'#7EE000':'#FF3B30');}else arc.setAttribute('d','M 22 138 A 103 103 0 0 1 22 138');}
   if(ndl)ndl.setAttribute('transform',`rotate(${deg-90} 125 138)`);
   if(num)num.textContent=steps>=1000?(steps/1000).toFixed(1)+'K':steps;
   if(st){if(!steps){st.textContent='Log steps in Check-in';st.style.color='var(--gry)';}
@@ -3185,11 +3177,7 @@ function renderTrend(){
     return;
   }
   // Get values and dates
-  const vals=ci.map(c=>{
-    let v = c[trendMetric];
-    if(trendMetric==='water') v = waterToMl(c.water||0);
-    return {date:c.date,v:v||0};
-  }).filter(p=>p.v>0);
+  const vals=ci.map(c=>({date:c.date,v:c[trendMetric]||0})).filter(p=>p.v>0);
   if(!vals.length){svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">No data for this metric</text>';return;}
   const minV=Math.min(...vals.map(p=>p.v)), maxV=Math.max(...vals.map(p=>p.v));
   const range=maxV-minV||1;
@@ -3204,7 +3192,7 @@ function renderTrend(){
   const areaD=`${pathD} L${pts[pts.length-1].x},${H} L${pts[0].x},${H} Z`;
   const isDown=vals[vals.length-1].v<=vals[0].v;
   const lineColor=(trendMetric==='weight'||trendMetric==='waist')?
-    (isDown?'#FFD600':'#FF3B30') : (isDown?'#FF3B30':'#FFD600');
+    (isDown?'#7EE000':'#FF3B30') : (isDown?'#FF3B30':'#7EE000');
   let svgHTML=`<defs><linearGradient id="ag" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${lineColor}" stop-opacity=".2"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/></linearGradient></defs>`;
   svgHTML+=`<path d="${areaD}" fill="url(#ag)"/>`;
   svgHTML+=`<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -3219,8 +3207,8 @@ function renderTrend(){
     const baseVal=trendMetric==='weight'?ub.baseWeight:ub.baseWaist;
     if(baseVal){
       const by=H-pad-(((baseVal-minV)/range)*(H-pad*2));
-      svgHTML+=`<line x1="${pad}" y1="${by}" x2="${W-pad}" y2="${by}" stroke="#FFD600" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>`;
-      svgHTML+=`<text x="${W-pad-2}" y="${by-3}" text-anchor="end" font-family="Barlow" font-size="8" fill="#FFD600" opacity=".7">Baseline: ${baseVal}</text>`;
+      svgHTML+=`<line x1="${pad}" y1="${by}" x2="${W-pad}" y2="${by}" stroke="#7EE000" stroke-width="1" stroke-dasharray="4,3" opacity=".4"/>`;
+      svgHTML+=`<text x="${W-pad-2}" y="${by-3}" text-anchor="end" font-family="Barlow" font-size="8" fill="#7EE000" opacity=".7">Baseline: ${baseVal}</text>`;
     }
   }
   svg.innerHTML=svgHTML;
@@ -3233,8 +3221,7 @@ function renderTrend(){
     const dayN=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
     const wk='W'+(dayN+1);
     if(!weeks[wk])weeks[wk]=[];
-    let v=c[trendMetric];
-    if(trendMetric==='water') v = waterToMl(c.water||0);
+    const v=c[trendMetric];
     if(v)weeks[wk].push(v);
   });
   const wkKeys=Object.keys(weeks).slice(0,12);
@@ -3247,7 +3234,7 @@ function renderTrend(){
     const clr=diff===null?'var(--gry)':parseFloat(diff)<0?(isGoodDown?'var(--grn)':'var(--red)'):(isGoodDown?'var(--red)':'var(--grn)');
     return `<div class="wk-chip">
       <div class="wk-n">${wk}</div>
-      <div class="wk-v">${trendMetric==='water' ? formatWater(Math.round(avg)) : avg.toFixed(1)}</div>
+      <div class="wk-v">${avg.toFixed(1)}</div>
       <div class="wk-d" style="color:${clr}">${diff!==null?(parseFloat(diff)>0?'+':'')+diff:'base'}</div>
     </div>`;
   }).join('');
@@ -3294,7 +3281,7 @@ function renderDash(){
     if(!allDone && ci.length<5){
       ob.style.display='block';
       ob.innerHTML=`<div class="onboard-card">
-        <div class="ob-ttl">🚀 Start here (3 steps)</div>
+        <div class="ob-ttl">🚀 Getting started</div>
         <div class="ob-item ${hasCI?'ob-done':''}">${hasCI?'✅':'1️⃣'} Complete your first check-in</div>
         <div class="ob-item ${hasProg?'ob-done':''}">${hasProg?'✅':'2️⃣'} Open Train — your program lives there</div>
         <div class="ob-item ${hasWkt?'ob-done':''}">${hasWkt?'✅':'3️⃣'} Log your first workout from the program</div>
@@ -3307,7 +3294,8 @@ function renderDash(){
   if(cn){
     if(u.coachNote && String(u.coachNote).trim()){
       cn.style.display='block';
-      cn.innerHTML=`<div class="coach-note-card"><div class="cn-ttl">💬 Note from your coach</div><div class="cn-body">${escHtml(u.coachNote)}</div></div>`;
+      const noteAge = u.coachNoteAt ? (function(ts){ const d=Math.floor((Date.now()-ts)/86400000); if(d<=0) return 'today'; if(d===1) return 'yesterday'; return d+' days ago'; })(u.coachNoteAt) : '';
+      cn.innerHTML=`<div class="coach-note-card"><div class="cn-ttl">💬 Note from your coach${noteAge?` <span style="font-weight:600;color:var(--gry);font-size:11px;letter-spacing:0;text-transform:none">· saved ${noteAge}</span>`:''}</div><div class="cn-body">${escHtml(u.coachNote)}</div></div>`;
     } else cn.style.display='none';
   }
 
@@ -3348,12 +3336,9 @@ function renderDash(){
     const last=ci[ci.length-1];
     const wDiff=last?(last.weight-u.baseWeight).toFixed(1):null;
     const waDiff=last?(last.waist-u.baseWaist).toFixed(1):null;
-    const wu=(typeof userGoals==='function'?userGoals(u).waistUnit:'in');
-    const baseWaDisp=formatWaist(u.baseWaist, wu);
-    const lastWaDisp=last?formatWaist(last.waist, wu):null;
     document.getElementById('baselineTxt').innerHTML=
-      `Starting weight: <strong style="color:var(--wht)">${u.baseWeight} kg</strong> · Starting waist: <strong style="color:var(--wht)">${baseWaDisp}</strong>`+
-      (wDiff!==null?`<br>Change: <strong style="color:${parseFloat(wDiff)<0?'var(--grn)':'var(--red)'}">${wDiff>0?'+':''}${wDiff} kg</strong> · <strong style="color:${parseFloat(waDiff)<0?'var(--grn)':'var(--red)'}">${waDiff>0?'+':''}${Number(waDiff).toFixed(1)} in</strong>`:'');
+      `Starting weight: <strong style="color:var(--wht)">${u.baseWeight} kg</strong> · Starting waist: <strong style="color:var(--wht)">${u.baseWaist} in</strong>`+
+      (wDiff!==null?`<br>Change: <strong style="color:${parseFloat(wDiff)<0?'var(--grn)':'var(--red)'}">${wDiff>0?'+':''}${wDiff} kg</strong> · <strong style="color:${parseFloat(waDiff)<0?'var(--grn)':'var(--red)'}">${waDiff>0?'+':''}${waDiff} in</strong>`:'');
   }
 
   document.getElementById('totCI').textContent=ci.length;
@@ -3362,13 +3347,7 @@ function renderDash(){
   document.getElementById('strN').textContent=ciStreak;
   // Show combined adherence under streak label if possible
   const strL=document.querySelector('.str-l');
-  if(strL){const adh=adherencePct(u,14);strL.textContent=(wStreak?(`Day streak · ${wStreak}d train`):'Day streak')+` · ${adh}% adh`;}
-  // Alerts + personal goals
-  try{ renderClientAlerts(u, ci); }catch(e){ console.error(e); }
-  try{ renderRemindPrompt(u); }catch(e){ console.error(e); }
-  try{ renderTodayScorecard(u, ci); }catch(e){ console.error(e); }
-  try{ renderGoalProgress(u, ci); }catch(e){ console.error(e); }
-
+  if(strL)strL.textContent=wStreak?(`Day streak · ${wStreak}d train`):'Day streak';
   // Quick actions: reminders + message coach
   let qa=document.getElementById('dashQuickActions');
   if(!qa){
@@ -3386,46 +3365,8 @@ function renderDash(){
   } else if(qa&&VIEWUSER){qa.innerHTML='';}
   if(!ci.length){renderSpeedo(0);renderTrend();const pc0=document.getElementById('progCard');if(pc0)pc0.style.display='none';return;}
   const last=ci[ci.length-1],prev=ci.length>1?ci[ci.length-2]:null;
-  // Weight card = 7-day average (not today's single log)
-  const weekAvg = (function(){
-    const start=new Date(); start.setDate(start.getDate()-6);
-    const startStr=start.toISOString().slice(0,10);
-    const vals=ci.filter(c=>c&&c.date>=startStr&&c.weight!=null&&!isNaN(c.weight)).map(c=>Number(c.weight));
-    if(!vals.length) return last.weight!=null?Number(last.weight):null;
-    return vals.reduce((a,b)=>a+b,0)/vals.length;
-  })();
-  const prevWeekAvg = (function(){
-    const end=new Date(); end.setDate(end.getDate()-7);
-    const start=new Date(); start.setDate(start.getDate()-13);
-    const a=start.toISOString().slice(0,10), b=end.toISOString().slice(0,10);
-    const vals=ci.filter(c=>c&&c.date>=a&&c.date<=b&&c.weight!=null&&!isNaN(c.weight)).map(c=>Number(c.weight));
-    if(!vals.length) return null;
-    return vals.reduce((x,y)=>x+y,0)/vals.length;
-  })();
-  setMet('mW','mWT', weekAvg!=null?Number(weekAvg.toFixed(1)):null, 'kg', prevWeekAvg!=null?Number(prevWeekAvg.toFixed(1)):null, true);
-  const mwt=document.getElementById('mWT');
-  if(mwt && weekAvg!=null && (mwt.textContent===''||mwt.innerHTML.indexOf('avg')<0)){
-    // append context if unchanged from last week
-  }
-  const waistUnit = userGoals(u).waistUnit;
-  const weekWaistAvgIn = (function(){
-    const start=new Date(); start.setDate(start.getDate()-6);
-    const startStr=start.toISOString().slice(0,10);
-    const vals=ci.filter(c=>c&&c.date>=startStr&&c.waist!=null&&!isNaN(c.waist)).map(c=>Number(c.waist));
-    if(!vals.length) return last.waist!=null?Number(last.waist):null;
-    return vals.reduce((a,b)=>a+b,0)/vals.length;
-  })();
-  const prevWeekWaistAvgIn = (function(){
-    const end=new Date(); end.setDate(end.getDate()-7);
-    const start=new Date(); start.setDate(start.getDate()-13);
-    const a=start.toISOString().slice(0,10), b=end.toISOString().slice(0,10);
-    const vals=ci.filter(c=>c&&c.date>=a&&c.date<=b&&c.waist!=null&&!isNaN(c.waist)).map(c=>Number(c.waist));
-    if(!vals.length) return null;
-    return vals.reduce((x,y)=>x+y,0)/vals.length;
-  })();
-  const wDisp = weekWaistAvgIn==null?null:(waistUnit==='cm'?weekWaistAvgIn*2.54:weekWaistAvgIn);
-  const wPrev = prevWeekWaistAvgIn==null?null:(waistUnit==='cm'?prevWeekWaistAvgIn*2.54:prevWeekWaistAvgIn);
-  setMet('mWa','mWaT', wDisp!=null?Number(wDisp.toFixed(1)):null, waistUnit, wPrev!=null?Number(wPrev.toFixed(1)):null, true);
+  setMet('mW','mWT',last.weight,'kg',prev?.weight,true);
+  setMet('mWa','mWaT',last.waist,'in',prev?.waist,true);
   setMet('mSl','mSlT',last.sleep,'hrs',prev?.sleep,false);
   setMet('mHu','mHuT',last.hunger,'/10',prev?.hunger,true);
   document.getElementById('mHuT').textContent=HU_LBL[last.hunger]||'';
@@ -3437,11 +3378,10 @@ function renderDash(){
   if(l7.length>=2){
     pc.style.display='block';
     const fw=l7[0].weight,lw=l7[l7.length-1].weight;
-    const stepGoal=(typeof userGoals==='function'?userGoals(u).steps:10000);
-    const sh=l7.filter(c=>(c.steps||0)>=stepGoal).length;
+    const sh=l7.filter(c=>c.steps>=10000).length;
     pb.innerHTML=`
       <div class="prog-wrap"><div class="prog-hd"><span>Weight change (7 days)</span><span style="color:${lw<=fw?'var(--grn)':'var(--red)'}">${lw<=fw?'▼':'▲'} ${Math.abs(lw-fw).toFixed(1)} kg</span></div><div class="prog-trk"><div class="prog-fill" style="width:${Math.min((lw/Math.max(...l7.map(c=>c.weight)))*100,100).toFixed(0)}%;background:${lw<=fw?'var(--grn)':'var(--red)'}"></div></div></div>
-      <div class="prog-wrap" style="margin-top:10px"><div class="prog-hd"><span>Steps compliance</span><span style="color:var(--grn)">${sh}/${l7.length} days at ${(stepGoal/1000).toFixed(0)}K</span></div><div class="prog-trk"><div class="prog-fill" style="width:${(sh/l7.length*100).toFixed(0)}%;background:var(--grn)"></div></div></div>`;
+      <div class="prog-wrap" style="margin-top:10px"><div class="prog-hd"><span>Steps compliance</span><span style="color:var(--grn)">${sh}/${l7.length} days at 10K</span></div><div class="prog-trk"><div class="prog-fill" style="width:${(sh/l7.length*100).toFixed(0)}%;background:var(--grn)"></div></div></div>`;
   } else if(pc) pc.style.display='none';
 }
 
@@ -3470,49 +3410,6 @@ function calcStreak(ci){
 function renderHistory(){
   const u=VIEWUSER||CU;
   const ci=[...myCI()].sort((a,b)=>a.date.localeCompare(b.date));
-  // Weekly water summary (last 7 days)
-  let waterWrap = document.getElementById('histWaterWeek');
-  if(!waterWrap){
-    const host = document.getElementById('scr-history');
-    if(host){
-      waterWrap = document.createElement('div');
-      waterWrap.id = 'histWaterWeek';
-      const sub = host.querySelector('.scr-sub');
-      if(sub && sub.nextSibling) host.insertBefore(waterWrap, sub.nextSibling);
-      else host.insertBefore(waterWrap, host.children[1]||null);
-    }
-  }
-  if(waterWrap){
-    const start = new Date(); start.setDate(start.getDate()-6);
-    const startStr = start.toISOString().slice(0,10);
-    const week = ci.filter(c=>c && c.date>=startStr);
-    const withW = week.map(c=>({date:c.date, ml: waterToMl(c.water||0)})).filter(x=>x.ml>0);
-    const target = (typeof userGoals==='function' ? userGoals(u).waterMl : 3000);
-    if(!withW.length){
-      waterWrap.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="card-lbl">💧 Water — last 7 days</div><div style="font-size:13px;color:var(--gry)">No water logged this week yet.</div></div>`;
-    } else {
-      const total = withW.reduce((s,x)=>s+x.ml,0);
-      const avg = Math.round(total / withW.length);
-      const daysHit = withW.filter(x=>x.ml>=target).length;
-      const chips = withW.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>{
-        const ok = x.ml >= target;
-        return `<div style="background:#000;border:1px solid ${ok?'rgba(255,214,0,.45)':'#333'};border-radius:10px;padding:8px 10px;min-width:72px;text-align:center">
-          <div style="font-size:9px;font-weight:800;color:#888;text-transform:uppercase">${x.date.slice(5)}</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:${ok?'#FFD600':'#FFB800'}">${formatWater(x.ml)}</div>
-        </div>`;
-      }).join('');
-      waterWrap.innerHTML = `<div class="card" style="margin-bottom:12px">
-        <div class="card-lbl">💧 Water — last 7 days</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Avg / day</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${formatWater(avg)}</div></div>
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Days logged</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${withW.length}/7</div></div>
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Hit target</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${daysHit}</div></div>
-        </div>
-        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${chips}</div>
-        <div style="font-size:11px;color:var(--gry);margin-top:8px">Target ${formatWater(target)} / day · set by coach</div>
-      </div>`;
-    }
-  }
   // Total lost banner
   const banner=document.getElementById('tlBanner');
   const tlMain=document.getElementById('tlMain');
@@ -3526,11 +3423,11 @@ function renderHistory(){
       banner.style.display='block';
       const parts=[];
       if(wLost!==null){
-        const clr=wLost>0?'#FFD600':'#FF3B30';
+        const clr=wLost>0?'#7EE000':'#FF3B30';
         parts.push(`<span style="color:${clr}">${wLost>0?'▼':'▲'} ${Math.abs(wLost).toFixed(1)} kg</span>`);
       }
       if(waLost!==null){
-        const clr=waLost>0?'#FFD600':'#FF3B30';
+        const clr=waLost>0?'#7EE000':'#FF3B30';
         parts.push(`<span style="color:${clr}">${waLost>0?'▼':'▲'} ${Math.abs(waLost).toFixed(1)} in waist</span>`);
       }
       tlMain.innerHTML=(wLost>0||waLost>0)?'🔥 '+parts.join('  ·  ')+' since you started!':parts.join('  ·  ')+' from baseline';
@@ -3538,15 +3435,9 @@ function renderHistory(){
     } else banner.style.display='none';
   } else if(banner) banner.style.display='none';
 
-  const recent=[...ci].reverse(); // full history (newest first)
-  const histSub=document.getElementById('histSub');
-  if(histSub){
-    histSub.textContent = recent.length
-      ? (recent.length+' check-in'+(recent.length===1?'':'s')+' · full history')
-      : 'No check-ins yet';
-  }
+  const recent=[...ci].reverse().slice(0,30);
   const tb=document.getElementById('histBody');
-  if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
+  if(!recent.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
   tb.innerHTML=recent.map(c=>{
     const proClr=c.protein>=100?'var(--grn)':c.protein>=50?'#F59E0B':'var(--red)';
     const proTxt=c.protein!=null?c.protein+'%':'—';
@@ -3554,13 +3445,10 @@ function renderHistory(){
     const wktTxt=c.workout===true?'✓':c.workout===false?'✗':'—';
     const sqLabels=['😴','😐','🙂','😁'];
     const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
-    const wMl = (c.water!=null && c.water!=='') ? waterToMl(c.water) : null;
-    const wTxt = wMl!=null ? formatWater(wMl) : '—';
     return `<tr>
       <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
       <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
       <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
-      <td style="color:var(--grn);font-size:11px;font-weight:700">${wTxt}</td>
       <td>${c.sleep??'—'} ${sqTxt}</td><td>${c.hunger??'—'}</td>
       <td style="color:${proClr}">${proTxt}</td>
       <td style="color:${wktClr}">${wktTxt}</td>
@@ -3609,7 +3497,7 @@ async function generateDemoCheckins(){
         protein:Math.floor(60+Math.random()*40),
         workout:Math.random()>0.4,
         sleepQual:Math.floor(1+Math.random()*3),
-        water:Math.floor(1500+Math.random()*2000),
+        water:Math.floor(4+Math.random()*7),
         notes:i===13?'Starting the journey! 💪':i===7?'Great week! 🔥':''
       });
     }
@@ -3623,29 +3511,79 @@ async function generateDemoCheckins(){
 }
 
 
+function isAdminSectionOpen(key, defaultOpen){
+  try{
+    const v = localStorage.getItem('sl_admin_sec_'+key);
+    if(v===null) return !!defaultOpen;
+    return v==='1';
+  }catch(e){ return !!defaultOpen; }
+}
+function toggleAdminSection(key){
+  const defaultOpen = (key==='commStats');
+  const open = !isAdminSectionOpen(key, defaultOpen);
+  try{ localStorage.setItem('sl_admin_sec_'+key, open?'1':'0'); }catch(e){}
+  applyAdminSection(key, open);
+  if(key==='programs'){ try{ renderAdmin(); }catch(e){} }
+  if(key==='demos' && open){ try{ renderAdminDemos(); }catch(e){} }
+  if(key==='photos' && open){ try{ renderAdminMemberPhotos(); }catch(e){} }
+}
+function applyAdminSection(key, open){
+  const map = {
+    commStats: ['commStatsBody','commStatsChev'],
+    demos: ['demosBody','demosChev'],
+    photos: ['photosBody','photosChev'],
+    notLogged: ['notLoggedBody','notLoggedChev'],
+    needsAtt: ['needsAttBody','needsAttChev'],
+    bulkMsg: ['bulkMsgBody','bulkMsgChev'],
+    photoMiss: ['photoMissBody','photoMissChev'],
+    programs: [null, null]
+  };
+  const ids = map[key];
+  if(!ids) return;
+  if(ids[0]){ const body=document.getElementById(ids[0]); if(body) body.style.display = open ? 'block' : 'none'; }
+  if(ids[1]){ const chev=document.getElementById(ids[1]); if(chev) chev.textContent = open ? '▾' : '›'; }
+}
 window._adminOpenEmail = window._adminOpenEmail || null;
 window._adminMemberQ = window._adminMemberQ || '';
 function toggleAdminMember(email){
   window._adminOpenEmail = (window._adminOpenEmail === email) ? null : email;
   try{ renderAdmin(); }catch(e){ console.error(e); }
-  // scroll detail into view after re-render
-  setTimeout(()=>{
-    const el=document.getElementById('adminMemberDetail');
-    if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
-  }, 50);
+  setTimeout(()=>{ const el=document.getElementById('adminMemberDetail'); if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 50);
 }
 function filterAdminMembers(q){
   window._adminMemberQ = q || '';
   try{ renderAdmin(); }catch(e){}
-  const inp=document.getElementById('adminMemberSearch');
-  if(inp){ inp.focus(); const v=inp.value; inp.value=''; inp.value=v; }
+}
+async function saveClientPhone(email){
+  if(!CU||CU.role!=='admin')return;
+  const id='tgPhone-'+email.replace(/[^a-zA-Z0-9]/g,'_');
+  const el=document.getElementById(id);
+  const phone=typeof normalizePhone==='function'?normalizePhone(el?el.value:''):(el?el.value:'');
+  try{
+    await fdb.collection('users').doc(email).set({phone:phone||null},{merge:true});
+    if(CACHE.users[email]) CACHE.users[email].phone=phone||null;
+    toast(phone?'📱 Phone saved':'Phone cleared','g');
+  }catch(e){console.error(e);toast('Could not save phone','r');}
+}
+function exportUserWeekCSV(email){
+  const u=gDB().users[email]; if(!u){toast('User not found','r');return;}
+  const start=new Date(); start.setDate(start.getDate()-6);
+  const startStr=start.toISOString().slice(0,10);
+  const ci=(Array.isArray(gDB().checkins[email])?gDB().checkins[email]:[]).filter(c=>c&&c.date>=startStr).sort((a,b)=>a.date.localeCompare(b.date));
+  const rows=[['Date','Weight','Waist','Steps','Sleep','Hunger','Water (ml)','Protein %','Workout','Notes']];
+  ci.forEach(c=>rows.push([c.date,c.weight,c.waist,c.steps,c.sleep,c.hunger,(typeof waterToMl==='function'?waterToMl(c.water||0):c.water),c.protein,c.workout?'yes':'no',c.notes||'']));
+  const csv=rows.map(r=>r.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=(u.name||'client').replace(/\s+/g,'_')+'_week_'+today()+'.csv';
+  a.click();
+  toast('Week CSV downloaded','g');
 }
 
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
-  try{ renderAdminRiskAndBulk(); coachBackupReminder(false); }catch(e){ console.error(e); }
   const d=gDB();
-  const allMembers=Object.values(d.users).filter(u=>u.role!=='admin');
+  const allMembers=Object.values(d.users).filter(u=>u.role!=='admin' && u.status!=='archived');
   const pending=allMembers.filter(u=>u.status==='pending');
   const approved=allMembers.filter(u=>u.status==='approved');
   const allCI=Object.values(d.checkins).map(v=>Array.isArray(v)?v.filter(e=>e&&e.date):[]).flat();
@@ -3676,175 +3614,153 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     <div class="cm"><div class="cmv" style="color:${inactive?'var(--red)':'var(--grn)'}">${inactive}</div><div class="cml">Inactive 7d+</div></div>
     <div class="cm"><div class="cmv">${allCI.filter(c=>(c.steps||0)>=10000).length}</div><div class="cml">10K Days</div></div>
     <div class="cm"><div class="cmv">${avgWt}</div><div class="cml">Avg Wt kg</div></div>`;
-  try{ applyAdminSection('commStats', isAdminSectionOpen('commStats', true)); }catch(e){}
-
 
   if(!allMembers.length){
     ml.innerHTML=renderProgramsAdminSection()+'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gry)">No members registered yet</div>';
     return;
   }
 
+
   function memberMeta(u){
     const raw=d.checkins[u.email];
     const ci=(Array.isArray(raw)?raw:[]).filter(e=>e&&e.date);
-    const streak=calcStreak(ci);
+    const streak=typeof calcStreak==='function'?calcStreak(ci):0;
     const last=ci.length?ci.reduce((a,b)=>a.date>b.date?a:b):null;
     const wkRaw=Array.isArray(d.workouts[u.email])?d.workouts[u.email]:[];
-    const lastCi=last;
     const lastW=wkRaw.length?wkRaw.reduce((a,b)=>a.date>b.date?a:b):null;
-    const lastAct=lastCi&&lastW?(lastCi.date>=lastW.date?lastCi.date:lastW.date):(lastCi?lastCi.date:lastW?lastW.date:null);
+    const lastAct=last&&lastW?(last.date>=lastW.date?last.date:lastW.date):(last?last.date:lastW?lastW.date:null);
     const weekAgoStr=(function(){const x=new Date();x.setDate(x.getDate()-7);return x.toISOString().slice(0,10);})();
     const isInactive=u.status!=='pending'&&(!lastAct||lastAct<weekAgoStr);
-    return {ci,streak,last,lastAct,isInactive,adh:adherencePct(u,14)};
+    const adh=typeof adherencePct==='function'?adherencePct(u,14):0;
+    return {ci,streak,last,lastAct,isInactive,adh};
   }
-
   function memberRow(u,i){
     try{
       const meta=memberMeta(u);
       const col=COLORS[i%COLORS.length];
       const isPend=u.status==='pending';
       const open = (window._adminOpenEmail===u.email);
-      const tip = isPend ? 'Pending approval' : ((meta.lastAct?('Last active '+meta.lastAct):'No activity')+' · '+meta.ci.length+' CI · '+meta.adh+'% adh');
+      let ago='never';
+      if(meta.lastAct){
+        const days=Math.floor((new Date(today()+'T00:00:00')-new Date(meta.lastAct+'T00:00:00'))/86400000);
+        ago=days<=0?'today':(days===1?'1d ago':days+'d ago');
+      }
+      const tip=isPend?'Pending approval':(ago+' · '+meta.ci.length+' CI · '+meta.adh+'% adh'+(u.phone?' · 📱':''));
       return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
         <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
-        <div class="mrow-main">
-          <div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}</div>
-          <div class="mrow-meta">${escHtml(u.email)} · ${tip}</div>
-        </div>
+        <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}</div>
+        <div class="mrow-meta">${escHtml(u.email)} · ${tip}</div></div>
         <span class="bdg ${isPend?'bdg-pend':meta.ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':meta.ci.length?'Active':'Approved'}</span>
         <span class="mrow-chev">${open?'▾':'›'}</span>
-      </div>
-      ${open?memberDetail(u,i):''}`;
-    }catch(err){
-      console.error(err);
-      return `<div class="mrow"><div class="mrow-nm">${escHtml(u.email)}</div></div>`;
-    }
+      </div>${open?memberDetail(u,i):''}`;
+    }catch(e){ console.error(e); return ''; }
   }
-
   function memberDetail(u,i){
-    try{
-      const meta=memberMeta(u);
-      const {ci,streak,last,lastAct}=meta;
-      const isPend=u.status==='pending';
-      const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
-      const waDiff=last&&u.baseWaist!=null?(last.waist-u.baseWaist).toFixed(1):null;
-      const progOptions=allPrograms().map(p=>`<option value="${p.id}" ${u.programId===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
-      const id=u.email.replace(/[^a-zA-Z0-9]/g,'_');
-      return `<div class="mc" id="adminMemberDetail" style="margin-top:0;margin-bottom:12px;border-color:rgba(255,214,0,.35)" onclick="event.stopPropagation()">
-        <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Joined ${escHtml(u.joined)||'—'} · Goal: ${escHtml(u.goal)||'—'}${u.baseWeight!=null?` · Baseline ${u.baseWeight}kg / ${u.baseWaist}in`:''}</div>
-        ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program</span>
-          <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)">
-            <option value="">— None —</option>
-            ${progOptions}
-          </select>
-        </div>`:''}
-        ${!isPend?`<div style="margin-bottom:8px">
-          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
-          <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}" placeholder="Note shown on their dashboard">${escHtml(u.coachNote||'')}</textarea>
-          <button class="approve-btn" style="margin-top:6px;padding:6px 12px;font-size:11px" onclick="saveCoachNote('${u.email}')">Save note</button>
-        </div>`:''}
-        ${!isPend?`<div style="margin-bottom:10px;padding-top:8px;border-top:1px solid var(--bdr)">
-          <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">🎯 Daily targets</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
-            <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
-            <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
-            <div><div class="fl" style="font-size:10px">Waist unit</div>
-              <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}">
-                <option value="in" ${(u.waistUnit||'in')==='in'?'selected':''}>Inches</option>
-                <option value="cm" ${u.waistUnit==='cm'?'selected':''}>Centimetres</option>
-              </select>
-            </div>
+    const meta=memberMeta(u);
+    const {ci,streak,last}=meta;
+    const isPend=u.status==='pending';
+    const id=u.email.replace(/[^a-zA-Z0-9]/g,'_');
+    const progOptions=(typeof allPrograms==='function'?allPrograms():[]).map(p=>`<option value="${p.id}" ${u.programId===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
+    const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
+    return `<div class="mc" id="adminMemberDetail" style="margin-bottom:12px;border-color:rgba(255,214,0,.35)" onclick="event.stopPropagation()">
+      <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Joined ${escHtml(u.joined)||'—'} · ${escHtml(u.goal)||'—'}</div>
+      ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">📱 WhatsApp phone</div>
+        <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
+        <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientPhone('${u.email}')">Save</button></div></div>`:''}
+      ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program</span>
+        <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)"><option value="">— None —</option>${progOptions}</select>
+      </div>`:''}
+      ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
+        <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}">${escHtml(u.coachNote||'')}</textarea>
+        <button class="approve-btn" style="margin-top:6px;padding:6px 12px;font-size:11px" onclick="saveCoachNote('${u.email}')">Save note</button>
+        ${u.coachNoteAt?`<div style="font-size:10px;color:var(--gry);margin-top:4px">Saved ${new Date(u.coachNoteAt).toLocaleDateString()}</div>`:''}
+      </div>`:''}
+      ${!isPend?`<div style="margin-bottom:10px;padding-top:8px;border-top:1px solid var(--bdr)">
+        <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">🎯 Daily targets</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
+          <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
+          <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
+          <div><div class="fl" style="font-size:10px">Waist unit</div>
+            <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}"><option value="in" ${(u.waistUnit||'in')==='in'?'selected':''}>Inches</option><option value="cm" ${u.waistUnit==='cm'?'selected':''}>cm</option></select>
           </div>
-          <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
-        </div>`:''}
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
-          ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
-          ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
-          ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
-          ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF</button>`:''}
-          ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
-          ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
-          <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'🗑️ Remove'}</button>
         </div>
-        ${!isPend?`<div class="mc-stats">
-          <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
-          <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak</div></div>
-          <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
-          <div class="mcs"><div class="mcsv" style="color:${meta.adh<40?'var(--red)':'var(--grn)'}">${meta.adh}%</div><div class="mcsl">Adh 14d</div></div>
-        </div>`:''}
-        ${last&&!isPend?`<div class="mc-last">
-          Last: ${escHtml(last.date)} · Wt: <strong>${last.weight}kg${wDiff!==null?' ('+(parseFloat(wDiff)>0?'+':'')+wDiff+')':''}</strong> · Waist: <strong>${last.waist}in</strong> · Steps: ${(last.steps||0).toLocaleString()} · Water: ${last.water!=null?formatWater(waterToMl(last.water)):'—'}
-          ${last.notes?`<br><em style="color:var(--gry2)">"${escHtml(last.notes)}"</em>`:''}
-        </div>`:''}
-      </div>`;
-    }catch(e){
-      console.error(e);
-      return '<div class="mc">Could not load details</div>';
-    }
+        <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
+      </div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
+        ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
+        ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
+        ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
+        ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF</button>`:''}
+        ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
+        ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserWeekCSV('${u.email}')">📅 Week CSV</button>`:''}
+        ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
+        <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'📦 Archive'}</button>
+      </div>
+      ${!isPend?`<div class="mc-stats">
+        <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
+        <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak</div></div>
+        <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
+        <div class="mcs"><div class="mcsv">${meta.adh}%</div><div class="mcsl">Adh 14d</div></div>
+      </div>`:''}
+      ${last&&!isPend?`<div class="mc-last">Last: ${escHtml(last.date)} · Wt: ${last.weight}kg · Steps: ${(last.steps||0).toLocaleString()}${last.water!=null?' · Water: '+(typeof formatWater==='function'?formatWater(waterToMl(last.water)):last.water):''}</div>`:''}
+    </div>`;
   }
 
   let html='';
   html+=renderProgramsAdminSection();
-
   html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search clients by name or email…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
-
   const q=(window._adminMemberQ||'').toLowerCase().trim();
-  function matchQ(u){
-    if(!q) return true;
-    return (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q);
-  }
+  function matchQ(u){ if(!q) return true; return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q); }
   const pendingF=pending.filter(matchQ);
   const approvedF=approved.filter(matchQ);
-
   if(pending.length){
-    html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--amb);margin:12px 0 8px;padding:8px 12px;background:rgba(255,184,0,.08);border-left:3px solid var(--amb);border-radius:4px">⏳ Pending (${pendingF.length}/${pending.length})</div>`;
-    html+=pendingF.length?pendingF.map((u,i)=>memberRow(u,i)).join(''):'<div style="font-size:12px;color:var(--gry);padding:6px 0">No matches</div>';
-  } else {
-    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0 4px">✅ No pending join requests</div>`;
-  }
-
-  html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(255,214,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Members (${approvedF.length}/${approved.length}) · tap a name</div>`;
-  if(approvedF.length){
-    html+=approvedF.map((u,i)=>memberRow(u,pending.length+i)).join('');
-  } else {
-    html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0">${approved.length?'No matches':'No approved members yet'}</div>`;
-  }
-
+    html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--amb);margin:12px 0 8px;padding:8px 12px;background:rgba(255,184,0,.08);border-left:3px solid var(--amb);border-radius:4px">⏳ Pending (${pendingF.length})</div>`;
+    html+=pendingF.map((u,i)=>memberRow(u,i)).join('')||'<div style="font-size:12px;color:var(--gry)">No matches</div>';
+  } else html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0 4px">✅ No pending join requests</div>`;
+  html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(255,214,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Members (${approvedF.length}) · tap a name</div>`;
+  html+=approvedF.length?approvedF.map((u,i)=>memberRow(u,pending.length+i)).join(''):`<div style="font-size:12px;color:var(--gry);padding:8px 0">No approved members yet</div>`;
   ml.innerHTML=html;
   try{
-    const dOpen = isAdminSectionOpen('demos', false);
-    const pOpen = isAdminSectionOpen('photos', false);
-    applyAdminSection('demos', dOpen);
-    applyAdminSection('photos', pOpen);
-    if(dOpen) renderAdminDemos();
-    if(pOpen) renderAdminMemberPhotos();
-  }catch(e){ console.error(e); }
+    const dOpen=isAdminSectionOpen('demos',false); const pOpen=isAdminSectionOpen('photos',false);
+    applyAdminSection('demos',dOpen); applyAdminSection('photos',pOpen);
+    if(dOpen && typeof renderAdminDemos==='function') renderAdminDemos();
+    if(pOpen && typeof renderAdminMemberPhotos==='function') renderAdminMemberPhotos();
+  }catch(e){}
+
 });
 
 const approveUser = requireAdmin(async function approveUser(email){
   try{
-    await fdb.collection('users').doc(email).update({status:'approved', nudgeReminders:true});
-    if(CACHE.users[email]){ CACHE.users[email].status='approved'; CACHE.users[email].nudgeReminders=true; }
-    toast('✅ '+email+' approved — they will be prompted to enable 6:30am / 9:00pm reminders','g');
+    await fdb.collection('users').doc(email).update({status:'approved'});
+    if(CACHE.users[email])CACHE.users[email].status='approved';
+    toast('✅ '+email+' approved','g');
     renderAdmin();
   }catch(e){console.error(e);toast('⚠️ Could not approve — check connection','r');}
 });
 
 const rejectUser = requireAdmin(async function rejectUser(email){
-  if(!confirm('Remove '+email+' from the community?'))return;
+  const u = gDB().users[email];
+  const isPend = u && u.status==='pending';
+  if(isPend){
+    if(!confirm('Decline and remove '+email+'?'))return;
+    try{
+      await fdb.collection('users').doc(email).delete();
+      delete CACHE.users[email];
+      toast('Request declined','r');
+      renderAdmin();
+    }catch(e){console.error(e);toast('Could not remove','r');}
+    return;
+  }
+  if(!confirm('Archive '+email+'? They will be hidden from the main list. Data is kept.'))return;
   try{
-    await fdb.collection('users').doc(email).delete();
-    await fdb.collection('checkins').doc(email).delete().catch(()=>{});
-    await fdb.collection('workouts').doc(email).delete().catch(()=>{});
-    delete CACHE.users[email];
-    delete CACHE.checkins[email];
-    delete CACHE.workouts[email];
-    toast('Removed '+email,'r');
+    await fdb.collection('users').doc(email).set({status:'archived', archivedAt:Date.now()},{merge:true});
+    if(CACHE.users[email]) CACHE.users[email].status='archived';
+    toast('Client archived','g');
     renderAdmin();
-  }catch(e){console.error(e);toast('⚠️ Could not remove — check connection','r');}
+  }catch(e){console.error(e);toast('Could not archive','r');}
 });
 
 async function resetPassword(email){
@@ -3880,7 +3796,7 @@ function csvEscape(v){
 const exportAllCSV = requireAdmin(function exportAllCSV(){
   if(!CU||CU.role!=='admin')return;
   const d=gDB();
-  const rows=[['Name','Email','Goal','Status','Joined','Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (ml)','Protein %','Workout','Notes']];
+  const rows=[['Name','Email','Goal','Status','Joined','Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
   const members=Object.values(d.users).filter(u=>u.role!=='admin');
   const sqL=['Poor','Fair','Good','Great'];
   members.forEach(u=>{
@@ -3889,7 +3805,7 @@ const exportAllCSV = requireAdmin(function exportAllCSV(){
       rows.push([u.name,u.email,u.goal,u.status,u.joined,'','','','','','','','','','','']);
     }else{
       ci.forEach(c=>{
-        rows.push([u.name,u.email,u.goal,u.status,u.joined,c.date,c.weight,c.waist,c.steps,c.sleep,c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger,(c.water!=null&&c.water!==''?waterToMl(c.water):''),c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']);
+        rows.push([u.name,u.email,u.goal,u.status,u.joined,c.date,c.weight,c.waist,c.steps,c.sleep,c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger,c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']);
       });
     }
   });
@@ -3902,9 +3818,9 @@ function exportMyCSV(){
   if(!CU)return;
   const u=VIEWUSER||CU;
   const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].sort((a,b)=>a.date.localeCompare(b.date));
-  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (ml)','Protein %','Workout','Notes']];
+  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
   const sqL=['Poor','Fair','Good','Great'];
-  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',(c.water!=null&&c.water!==''?waterToMl(c.water):''),c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
+  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
   const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
   downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
   toast('⬇️ CSV exported','g');
@@ -3965,7 +3881,7 @@ function exportMyPDF(){
   // ── Page header bar ──
   function drawHeader(subtitle){
     doc.setFillColor(14,14,14);doc.rect(0,0,210,20,'F');
-    doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(255,214,0);
+    doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(126,224,0);
     doc.text('SHREDLANE',14,13);
     doc.setFontSize(8);doc.setTextColor(180,180,180);doc.setFont(undefined,'normal');
     doc.text(subtitle,196,13,{align:'right'});
@@ -4291,8 +4207,8 @@ function exportUserCSV(email){
   const ci=[...(Array.isArray(gDB().checkins[email])?gDB().checkins[email]:[])].filter(e=>e&&e.date).sort((a,b)=>a.date.localeCompare(b.date));
   if(!ci.length){toast('No check-ins to export for '+u.name,'a');return;}
   const sqL=['Poor','Fair','Good','Great'];
-  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (ml)','Protein %','Workout','Notes']];
-  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',(c.water!=null&&c.water!==''?waterToMl(c.water):''),c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
+  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
+  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
   const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
   downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
   toast('⬇️ CSV exported for '+u.name,'g');
@@ -4301,36 +4217,14 @@ function exportUserCSV(email){
 // ═══════════════════════════════════════
 // CLIENT UX PACK — reminders, rest timer, PWA, offline, share, etc.
 // ═══════════════════════════════════════
-let _restInterval=null,_restLeft=0,_restAudioCtx=null;
-function playRestAlarm(){
-  try{
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if(!AC) return;
-    if(!_restAudioCtx) _restAudioCtx = new AC();
-    const ctx = _restAudioCtx;
-    if(ctx.state==='suspended') ctx.resume();
-    // Three short beeps
-    [0, 0.22, 0.44].forEach((t,i)=>{
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = i===2 ? 990 : 880;
-      gain.gain.value = 0.0001;
-      osc.connect(gain); gain.connect(ctx.destination);
-      const start = ctx.currentTime + t;
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
-      osc.start(start);
-      osc.stop(start + 0.2);
-    });
-  }catch(e){ console.log('alarm audio', e); }
-  try{ if(navigator.vibrate) navigator.vibrate([300,120,300,120,400]); }catch(e){}
-  try{
-    if('Notification' in window && Notification.permission==='granted'){
-      new Notification('Shredlane — Rest over', {body:'Time for your next set 💪', icon:'./icon-192.png', tag:'rest-timer'});
-    }
-  }catch(e){}
+let _restInterval=null,_restLeft=0;
+function extendRestTimer(secs){
+  secs=secs||30;
+  if(typeof _restLeft==='undefined'||_restLeft<=0){ startRestTimer(secs); return; }
+  _restLeft += secs;
+  const disp=document.getElementById('restTimerDisplay');
+  if(disp){ const m=Math.floor(_restLeft/60),s=_restLeft%60; disp.textContent=m+':'+String(s).padStart(2,'0'); }
+  toast('+'+secs+'s rest','g');
 }
 function startRestTimer(secs){
   secs=secs||90;
@@ -4338,20 +4232,12 @@ function startRestTimer(secs){
   const box=document.getElementById('restTimer');
   const disp=document.getElementById('restTimerDisplay');
   if(box)box.classList.add('show');
-  // Unlock audio on user gesture (required on iOS)
-  try{
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if(AC){
-      if(!_restAudioCtx) _restAudioCtx = new AC();
-      if(_restAudioCtx.state==='suspended') _restAudioCtx.resume();
-    }
-  }catch(e){}
   function tick(){
     const m=Math.floor(_restLeft/60),s=_restLeft%60;
     if(disp)disp.textContent=m+':'+String(s).padStart(2,'0');
     if(_restLeft<=0){
       stopRestTimer();
-      playRestAlarm();
+      try{if(navigator.vibrate)navigator.vibrate([200,100,200]);}catch(e){}
       toast('⏱ Rest done — next set!','g');
       return;
     }
@@ -4389,107 +4275,113 @@ function dismissPWA(){
   try{localStorage.setItem('pwaDismissed','1');}catch(e){}
 }
 
-// Scheduled reminders: 06:30 weight+waist · 21:00 protein/water/steps
-// Works while the app/PWA is installed or open; browsers cannot guarantee exact times when fully closed without push servers.
-const REMIND_MORNING = {h:6, m:30, key:'sl_rem_am_', title:'Shredlane — Morning log', body:'Time to log your weight and waist ⚖️'};
-const REMIND_EVENING = {h:21, m:0, key:'sl_rem_pm_', title:'Shredlane — Evening log', body:'Log protein, water, and steps before bed 💧🚶'};
-let _remindTimer = null;
-
-function remindLocalKey(prefix){ return prefix + today(); }
-
-function fireShredlaneNotification(title, body, storageKey){
-  if(localStorage.getItem(storageKey)) return false;
-  try{
-    if(!('Notification' in window) || Notification.permission!=='granted') return false;
-    new Notification(title, {body: body, icon: './icon-192.png', badge: './icon-192.png', tag: storageKey});
-    localStorage.setItem(storageKey, '1');
-    return true;
-  }catch(e){ console.log('notify', e); return false; }
-}
-
-function checkScheduledReminders(){
-  if(!CU || CU.role==='admin' || VIEWUSER) return;
-  if(!('Notification' in window) || Notification.permission!=='granted') return;
-  const now = new Date();
-  const mins = now.getHours()*60 + now.getMinutes();
-  // Morning window 06:30–11:59 (catch people who open later)
-  const amStart = REMIND_MORNING.h*60 + REMIND_MORNING.m;
-  const amEnd = 12*60;
-  if(mins >= amStart && mins < amEnd){
-    fireShredlaneNotification(REMIND_MORNING.title, REMIND_MORNING.body, remindLocalKey(REMIND_MORNING.key));
-  }
-  // Evening window 21:00–23:59
-  const pmStart = REMIND_EVENING.h*60 + REMIND_EVENING.m;
-  const pmEnd = 24*60;
-  if(mins >= pmStart && mins < pmEnd){
-    fireShredlaneNotification(REMIND_EVENING.title, REMIND_EVENING.body, remindLocalKey(REMIND_EVENING.key));
-  }
-}
-
+// Daily check-in reminder (browser Notification)
 function setupReminders(){
-  checkScheduledReminders();
-  if(_remindTimer) clearInterval(_remindTimer);
-  // Re-check every minute while app is open / in background tab
-  _remindTimer = setInterval(checkScheduledReminders, 60000);
-  document.removeEventListener('visibilitychange', _onRemindVisibility);
-  document.addEventListener('visibilitychange', _onRemindVisibility);
-}
-function _onRemindVisibility(){
-  if(document.visibilityState==='visible') checkScheduledReminders();
-}
-
-function enableReminders(){
-  if(!('Notification' in window)){toast('Notifications not supported on this device — use Add to Home Screen on Chrome/Safari','a');return;}
-  Notification.requestPermission().then(p=>{
-    if(p==='granted'){
-      try{ localStorage.setItem('sl_reminders_on','1'); }catch(e){}
-      toast('🔔 Reminders on: 6:30am weight & waist · 9:00pm protein, water & steps','g');
-      setupReminders();
-    } else {
-      toast('Notifications blocked — enable in phone/browser settings','a');
+  if(!('Notification' in window))return;
+  const key='shredlane_remind_'+today();
+  if(localStorage.getItem(key))return;
+  if(Notification.permission==='default'){
+    // soft ask once per session via toast action isn't available — request on first dashboard
+  }
+  if(Notification.permission==='granted'){
+    const h=new Date().getHours();
+    // gentle evening nudge if no check-in today
+    if(h>=18){
+      const ci=myCI();
+      if(!ci.some(c=>c.date===today())){
+        try{
+          new Notification('Shredlane',{body:'Don’t forget today’s check-in 💪',icon:undefined});
+          localStorage.setItem(key,'1');
+        }catch(e){}
+      }
     }
+  }
+}
+function enableReminders(){
+  if(!('Notification' in window)){toast('Notifications not supported on this device','a');return;}
+  Notification.requestPermission().then(p=>{
+    if(p==='granted'){toast('🔔 Reminders enabled','g');setupReminders();}
+    else toast('Notifications blocked — enable in browser settings','a');
   });
 }
 
-// Auto-resume reminders for returning members
-(function initReminderResume(){
-  try{
-    if(localStorage.getItem('sl_reminders_on')==='1' && 'Notification' in window && Notification.permission==='granted'){
-      window.addEventListener('load', function(){ setTimeout(setupReminders, 1500); });
-    }
-  }catch(e){}
-})();
-
 // WhatsApp coach link
 function messageCoach(text){
-  // Clients → coach WhatsApp
   const msg=encodeURIComponent(text||'Hi coach — quick update from Shredlane');
   window.open('https://wa.me/254705671119?text='+msg,'_blank');
 }
-function remindClient(firstName, evt){
+function normalizePhone(raw){
+  if(!raw) return '';
+  let d = String(raw).replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length===10 && d.startsWith('0')) d = '254'+d.slice(1);
+  if(d.length===9 && (d.startsWith('7')||d.startsWith('1'))) d = '254'+d;
+  return d;
+}
+function openWhatsAppTo(phone, body){
+  const msg = encodeURIComponent(body||'');
+  try{ navigator.clipboard.writeText(body||''); }catch(e){}
+  const digits = normalizePhone(phone);
+  const url = digits ? ('https://wa.me/'+digits+'?text='+msg) : ('https://wa.me/?text='+msg);
+  const w = window.open(url, '_blank');
+  return !!w;
+}
+function remindClient(firstName, evt, email){
   if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
   const name = (firstName||'there').trim() || 'there';
-  const text = 'Hi '+name+', quick reminder from Shredlane — please log today\'s check-in when you can. You\'ve got this.';
-  const msg = encodeURIComponent(text);
-  try{ navigator.clipboard.writeText(text); }catch(e){}
-  // No fixed phone number — WhatsApp lets you pick the client contact
-  const w = window.open('https://wa.me/?text='+msg, '_blank');
-  if(!w){
-    toast('Allow pop-ups, or paste the reminder from clipboard in WhatsApp','a');
+  const body = 'Hi '+name+', quick reminder from Shredlane — please log today\'s check-in when you can. You\'ve got this.';
+  const u = email ? (gDB().users[email]||{}) : {};
+  const ok = openWhatsAppTo(u.phone, body);
+  if(!ok) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
+  else toast(u.phone ? ('WhatsApp opened for '+name) : ('WhatsApp opened — pick '+name+' (no phone on file)'),'g');
+}
+function messageClientCheckIn(firstName, evt, email){
+  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
+  const name = (firstName||'there').trim() || 'there';
+  const body = 'Hi '+name+', checking in from Shredlane — how are you getting on?';
+  const u = email ? (gDB().users[email]||{}) : {};
+  const ok = openWhatsAppTo(u.phone, body);
+  if(!ok) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
+  else toast('WhatsApp opened','g');
+}
+function remindAllNotLogged(){
+  const d=gDB();
+  const tday=today();
+  const list = Object.values(d.users||{}).filter(u=>u.role!=='admin'&&u.status==='approved').filter(u=>{
+    const ci=Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
+    return !ci.some(c=>c&&c.date===tday);
+  });
+  if(!list.length){ toast('Everyone has checked in today','g'); return; }
+  const withPhone = list.find(u=>normalizePhone(u.phone));
+  if(withPhone){
+    openWhatsAppTo(withPhone.phone, 'Hi '+(withPhone.name||'').split(' ')[0]+', quick reminder from Shredlane — please log today\'s check-in when you can.');
+    toast(list.length+' still due — chat opened for first client with a phone','g');
   } else {
-    toast('WhatsApp opened — pick '+name+' and send. Message also copied.','g');
+    const names = list.map(u=>(u.name||'').split(' ')[0]).filter(Boolean).slice(0,12).join(', ');
+    openWhatsAppTo('', 'Shredlane reminder — please log today\'s check-in. Still due: '+names);
+    toast(list.length+' still due — pick contacts in WhatsApp','a');
   }
 }
-function messageClientCheckIn(firstName, evt){
-  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
-  const name = (firstName||'there').trim() || 'there';
-  const text = 'Hi '+name+', checking in from Shredlane — how are you getting on?';
-  const msg = encodeURIComponent(text);
-  try{ navigator.clipboard.writeText(text); }catch(e){}
-  const w = window.open('https://wa.me/?text='+msg, '_blank');
-  if(!w) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
-  else toast('WhatsApp opened — pick '+name+' and send','g');
+async function saveCoachTargets(email){
+  if(!CU||CU.role!=='admin')return;
+  const id=email.replace(/[^a-zA-Z0-9]/g,'_');
+  const water=parseInt((document.getElementById('tgW-'+id)||{}).value,10);
+  const steps=parseInt((document.getElementById('tgS-'+id)||{}).value,10);
+  const sleep=parseFloat((document.getElementById('tgSl-'+id)||{}).value);
+  const unit=((document.getElementById('tgU-'+id)||{}).value)||'in';
+  const payload={
+    waterTargetMl: isNaN(water)?3000:water,
+    stepsTarget: isNaN(steps)?10000:steps,
+    sleepTarget: isNaN(sleep)?7:sleep,
+    waistUnit: unit==='cm'?'cm':'in'
+  };
+  try{
+    await fdb.collection('users').doc(email).set(payload,{merge:true});
+    if(CACHE.users[email]) Object.assign(CACHE.users[email], payload);
+    toast('🎯 Targets saved','g');
+  }catch(e){console.error(e);toast('Could not save targets','r');}
 }
+
 
 // Share progress image
 function shareProgressImage(){
@@ -4500,7 +4392,7 @@ function shareProgressImage(){
   canvas.width=720;canvas.height=900;
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#0e0e0e';ctx.fillRect(0,0,720,900);
-  ctx.fillStyle='#FFD600';ctx.font='bold 36px Barlow Condensed,sans-serif';
+  ctx.fillStyle='#7EE000';ctx.font='bold 36px Barlow Condensed,sans-serif';
   ctx.fillText('SHREDLANE',40,60);
   ctx.fillStyle='#fff';ctx.font='bold 42px Barlow Condensed,sans-serif';
   ctx.fillText(u.name.split(' ')[0],40,120);
@@ -4521,7 +4413,7 @@ function shareProgressImage(){
     ctx.fillStyle='#fff';ctx.font='bold 28px Barlow Condensed,sans-serif';ctx.fillText(String(v),280,y);
     y+=56;
   });
-  ctx.fillStyle='#FFD600';ctx.font='18px Barlow,sans-serif';
+  ctx.fillStyle='#7EE000';ctx.font='18px Barlow,sans-serif';
   ctx.fillText('shredlane · consistency compounds',40,860);
   canvas.toBlob(blob=>{
     if(!blob)return;
@@ -4676,7 +4568,6 @@ async function uploadToCloudinary(file, folder){
 
 async function savePhotos(){
   if(!CU) return;
-  if(VIEWUSER){ toast('You are viewing a client — switch back to Admin to exit. Photos upload is for each member\'s own account.','a'); return; }
   if(CU.status==='pending'){ toast('⏳ Awaiting approval','a'); return; }
   const hasAny = photoFiles.front || photoFiles.side || photoFiles.back;
   if(!hasAny){ toast('Select at least one photo','r'); return; }
@@ -4744,33 +4635,8 @@ function renderPhotos(){
   const email = VIEWUSER ? VIEWUSER.email : CU.email;
   const raw = gDB().photos[email];
   const list = (Array.isArray(raw)?raw:[]).filter(e=>e&&e.date).sort((a,b)=>b.date.localeCompare(a.date));
-
-  // Coach viewing a client = view only (no upload into their account from this screen)
-  const uploadCard = document.getElementById('photoUploadCard');
-  const datePick = document.getElementById('photoDateDisp');
-  if(uploadCard){
-    if(VIEWUSER){
-      uploadCard.style.display = 'none';
-    } else {
-      uploadCard.style.display = 'block';
-    }
-  }
-  // label gallery
-  const galLbl = document.getElementById('photoGalleryLabel');
-  if(galLbl){
-    galLbl.textContent = VIEWUSER
-      ? ('History — '+VIEWUSER.name+' ('+list.length+' set'+(list.length===1?'':'s')+')')
-      : ('History ('+list.length+' set'+(list.length===1?'':'s')+')');
-  }
-
   renderPhotoCompare();
-  if(!list.length){
-    card.style.display='block';
-    container.innerHTML = VIEWUSER
-      ? '<div style="font-size:13px;color:var(--gry);padding:12px 0">No progress photos from this client yet.</div>'
-      : '<div style="font-size:13px;color:var(--gry);padding:12px 0">No photo sets yet — upload front / side / back above.</div>';
-    return;
-  }
+  if(!list.length){ card.style.display='none'; return; }
   card.style.display='block';
 
   container.innerHTML = list.map((entry,i)=>{
@@ -4937,20 +4803,9 @@ function viewMemberPhotos(email){
   if(!user) return;
   VIEWUSER = user;
   goTab('photos');
-  toast('📷 Viewing '+user.name+"'s photos",'g');
+  toast('Viewing as '+user.name,'a');
 }
   
-</script>
-
-<script>
-// PWA: register service worker (needed for Install on many Android phones)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js').catch(function (err) {
-      console.log('SW register failed', err);
-    });
-  });
-}
 </script>
 </body>
 </html>
