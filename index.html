@@ -863,7 +863,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- HISTORY -->
   <div class="scr" id="scr-history">
     <div class="scr-ttl">HISTORY</div>
-    <div class="scr-sub">Your last 30 check-ins</div>
+    <div class="scr-sub" id="histSub">All check-ins</div>
     <div class="tl-banner" id="tlBanner" style="display:none">
       <div class="tl-main" id="tlMain"></div>
       <div class="tl-sub" id="tlSub"></div>
@@ -3450,9 +3450,15 @@ function renderHistory(){
     } else banner.style.display='none';
   } else if(banner) banner.style.display='none';
 
-  const recent=[...ci].reverse().slice(0,30);
+  const recent=[...ci].reverse(); // full history (newest first)
+  const histSub=document.getElementById('histSub');
+  if(histSub){
+    histSub.textContent = recent.length
+      ? (recent.length+' check-in'+(recent.length===1?'':'s')+' · full history')
+      : 'No check-ins yet';
+  }
   const tb=document.getElementById('histBody');
-  if(!recent.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
+  if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
   tb.innerHTML=recent.map(c=>{
     const proClr=c.protein>=100?'var(--grn)':c.protein>=50?'#F59E0B':'var(--red)';
     const proTxt=c.protein!=null?c.protein+'%':'—';
