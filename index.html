@@ -928,7 +928,17 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="scr-sub">Coach dashboard</div>
     <div class="adm-banner">🔒 Private — coach view only</div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="b-secondary" style="padding:10px 16px;" onclick="exportAllCSV()">⬇️ Download all data (CSV)</button></div>
-    <div class="card"><div class="card-lbl">Community Stats</div><div class="comm-grid" id="commGrid"></div></div>
+    <div class="card" id="commStatsCard">
+      <div class="card-lbl" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin:0" onclick="toggleAdminSection('commStats')">
+        <span>Community Stats</span>
+        <span id="commStatsChev" style="color:var(--grn);font-size:14px">▾</span>
+      </div>
+      <div id="commStatsBody" style="margin-top:12px">
+        <div class="comm-grid" id="commGrid"></div>
+      </div>
+    </div>
+    <div id="adminRiskPanel"></div>
+    <div id="adminBulkBar" style="display:none;margin-bottom:12px"></div>
     <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin-bottom:10px">Member Approvals & Data</div>
     <div id="membersList"></div>
     
@@ -3024,12 +3034,47 @@ function renderProgramBuilder(){
   </div>`;
 }
 
+function isAdminSectionOpen(key, defaultOpen){
+  try{
+    const v = localStorage.getItem('sl_admin_sec_'+key);
+    if(v===null) return !!defaultOpen;
+    return v==='1';
+  }catch(e){ return !!defaultOpen; }
+}
+function toggleAdminSection(key){
+  const open = !isAdminSectionOpen(key, true);
+  try{ localStorage.setItem('sl_admin_sec_'+key, open?'1':'0'); }catch(e){}
+  applyAdminSection(key, open);
+  // programs live inside membersList HTML — re-render admin if programs
+  if(key==='programs'){
+    try{ renderAdmin(); }catch(e){}
+  }
+}
+function applyAdminSection(key, open){
+  if(key==='commStats'){
+    const body=document.getElementById('commStatsBody');
+    const chev=document.getElementById('commStatsChev');
+    if(body) body.style.display = open ? 'block' : 'none';
+    if(chev) chev.textContent = open ? '▾' : '›';
+  }
+}
+
 function renderProgramsAdminSection(){
   const list=allPrograms();
-  let html=`<div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin:20px 0 10px">Workout Programs</div>`;
+  const open = isAdminSectionOpen('programs', false) || !!(progBuilder && progBuilder._open);
+  let html=`<div class="card" style="margin:12px 0;padding:12px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('programs')">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Workout Programs <span style="color:var(--gry);font-weight:600;text-transform:none;letter-spacing:0">(${list.length})</span></div>
+      <span style="color:var(--grn);font-size:14px;font-weight:800">${open?'▾':'›'}</span>
+    </div>`;
+  if(!open){
+    html+=`</div>`;
+    return html;
+  }
+  html+=`<div style="margin-top:12px">`;
   html+= (progBuilder._open?renderProgramBuilder():`<button class="add-prog-day-btn" style="margin-bottom:14px" onclick="openProgramBuilderNew()">＋ New Program</button>`);
   if(!list.length && !progBuilder._open){
-    html+=`<div style="font-size:12px;color:var(--gry);padding:6px 0 14px">No programs yet — create one above.</div>`;
+    html+=`<div style="font-size:12px;color:var(--gry);padding:6px 0 4px">No programs yet — create one above.</div>`;
   } else {
     html+=list.map(p=>{
       const assignedCount=Object.values(gDB().users).filter(u=>u.programId===p.id).length;
@@ -3048,6 +3093,7 @@ function renderProgramsAdminSection(){
       </div>`;
     }).join('');
   }
+  html+=`</div></div>`;
   return html;
 }
 
@@ -3588,6 +3634,8 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     <div class="cm"><div class="cmv" style="color:${inactive?'var(--red)':'var(--grn)'}">${inactive}</div><div class="cml">Inactive 7d+</div></div>
     <div class="cm"><div class="cmv">${allCI.filter(c=>(c.steps||0)>=10000).length}</div><div class="cml">10K Days</div></div>
     <div class="cm"><div class="cmv">${avgWt}</div><div class="cml">Avg Wt kg</div></div>`;
+  try{ applyAdminSection('commStats', isAdminSectionOpen('commStats', true)); }catch(e){}
+
 
   if(!allMembers.length){
     ml.innerHTML=renderProgramsAdminSection()+'<div style="text-align:center;padding:24px;font-size:13px;color:var(--gry)">No members registered yet</div>';
