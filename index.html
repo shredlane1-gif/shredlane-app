@@ -2331,11 +2331,36 @@ function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=e
 function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:''});renderExerciseBuilder();}
 
 
-// ── Personal records (heaviest working set per exercise name) ──
+// ── Personal records (weight + reps / estimated 1RM) ──
 function normalizeExName(n){
   return String(n||'').trim().toLowerCase().replace(/\s+/g,' ');
 }
-function bestWeightForExercise(workouts, exName, excludeId){
+// Epley estimated 1RM — rewards heavier weight and more reps
+function est1RM(weight, reps){
+  const wt = parseDec(weight);
+  const r = parseInt(reps, 10);
+  if(isNaN(wt) || wt<=0) return null;
+  if(isNaN(r) || r<=0) return wt;
+  if(r===1) return wt;
+  return wt * (1 + r/30);
+}
+function setScore(s){
+  const wt = parseDec(s.weight);
+  const r = parseInt(s.reps, 10);
+  if(isNaN(wt) || wt<=0) return null;
+  const reps = (!isNaN(r) && r>0) ? r : 1;
+  return { weight: wt, reps: reps, e1rm: est1RM(wt, reps) };
+}
+function isBetterSet(a, b){
+  // a better than b?
+  if(!a) return false;
+  if(!b) return true;
+  if(a.weight > b.weight + 0.05) return true;
+  if(Math.abs(a.weight - b.weight) <= 0.05 && a.reps > b.reps) return true;
+  if(a.e1rm > (b.e1rm||0) + 0.25 && a.weight >= b.weight - 0.05) return true;
+  return false;
+}
+function bestSetForExercise(workouts, exName, excludeId){
   const key = normalizeExName(exName);
   if(!key) return null;
   let best = null;
@@ -2344,9 +2369,8 @@ function bestWeightForExercise(workouts, exName, excludeId){
     (w.exercises||[]).forEach(ex=>{
       if(normalizeExName(ex.name)!==key) return;
       (ex.sets||[]).forEach(s=>{
-        const wt = parseDec(s.weight);
-        if(isNaN(wt) || wt<=0) return;
-        if(best==null || wt>best) best = wt;
+        const sc = setScore(s);
+        if(sc && isBetterSet(sc, best)) best = sc;
       });
     });
   });
@@ -2357,13 +2381,24 @@ function detectPRs(entry, priorWorkouts){
   (entry.exercises||[]).forEach(ex=>{
     let setBest = null;
     (ex.sets||[]).forEach(s=>{
-      const wt = parseDec(s.weight);
-      if(!isNaN(wt) && wt>0 && (setBest==null || wt>setBest)) setBest = wt;
+      const sc = setScore(s);
+      if(sc && isBetterSet(sc, setBest)) setBest = sc;
     });
-    if(setBest==null) return;
-    const prev = bestWeightForExercise(priorWorkouts, ex.name, entry.id);
-    if(prev==null || setBest > prev + 0.05){
-      prs.push({ name: (ex.name||'').trim()||'Exercise', weight: setBest, prev: prev });
+    if(!setBest) return;
+    const prev = bestSetForExercise(priorWorkouts, ex.name, entry.id);
+    if(!prev || isBetterSet(setBest, prev)){
+      let kind = 'PR';
+      if(!prev) kind = 'First log';
+      else if(setBest.weight > prev.weight + 0.05) kind = 'Weight PR';
+      else if(Math.abs(setBest.weight - prev.weight) <= 0.05 && setBest.reps > prev.reps) kind = 'Reps PR';
+      else kind = 'Strength PR';
+      prs.push({
+        name: (ex.name||'').trim()||'Exercise',
+        weight: setBest.weight,
+        reps: setBest.reps,
+        prev: prev,
+        kind: kind
+      });
     }
   });
   return prs;
@@ -2375,15 +2410,16 @@ function allTimePRs(workouts){
       const key = normalizeExName(ex.name);
       if(!key) return;
       (ex.sets||[]).forEach(s=>{
-        const wt = parseDec(s.weight);
-        if(isNaN(wt)||wt<=0) return;
-        if(!map[key] || wt > map[key].weight){
-          map[key] = { name: (ex.name||'').trim(), weight: wt, date: w.date };
+        const sc = setScore(s);
+        if(!sc) return;
+        const cur = map[key];
+        if(!cur || isBetterSet(sc, cur)){
+          map[key] = { name: (ex.name||'').trim(), weight: sc.weight, reps: sc.reps, e1rm: sc.e1rm, date: w.date };
         }
       });
     });
   });
-  return Object.values(map).sort((a,b)=>b.weight-a.weight);
+  return Object.values(map).sort((a,b)=>(b.e1rm||0)-(a.e1rm||0));
 }
 
 let _savingWorkout=false;
@@ -2434,7 +2470,7 @@ async function saveWorkout(){
     const prs = detectPRs(entry, prior);
     if(offline) toast('💾 Offline: workout queued — will sync when online','g');
     else if(prs.length){
-      const msg = prs.slice(0,3).map(p=>'🏆 PR '+p.name+': '+p.weight+' kg'+(p.prev!=null?' (was '+p.prev+' kg)':'')).join(' · ');
+      const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
       toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
     } else {
       toast(isUpdate?'✅ Workout updated':'✅ Workout saved','g');
@@ -2527,9 +2563,9 @@ function renderWorkoutsScreen(){
       prWrap.innerHTML=`<div class="card" style="margin-bottom:12px;padding:12px 14px">
         <div class="card-lbl" style="margin-bottom:8px">🏆 Personal records</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${prs.map(p=>`<div style="background:#000;border:1px solid rgba(255,214,0,.4);border-radius:10px;padding:8px 10px;min-width:90px">
+          ${prs.map(p=>`<div style="background:#000;border:1px solid rgba(255,214,0,.4);border-radius:10px;padding:8px 10px;min-width:100px">
             <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.05em">${escHtml(p.name)}</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;font-style:italic;color:#FFD600">${p.weight} <span style="font-size:12px">kg</span></div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;font-style:italic;color:#FFD600">${p.weight}<span style="font-size:12px"> kg</span> × ${p.reps||1}</div>
             <div style="font-size:10px;color:#666">${escHtml(p.date||'')}</div>
           </div>`).join('')}
         </div>
@@ -4339,6 +4375,7 @@ async function uploadToCloudinary(file, folder){
 
 async function savePhotos(){
   if(!CU) return;
+  if(VIEWUSER){ toast('You are viewing a client — switch back to Admin to exit. Photos upload is for each member\'s own account.','a'); return; }
   if(CU.status==='pending'){ toast('⏳ Awaiting approval','a'); return; }
   const hasAny = photoFiles.front || photoFiles.side || photoFiles.back;
   if(!hasAny){ toast('Select at least one photo','r'); return; }
@@ -4406,8 +4443,33 @@ function renderPhotos(){
   const email = VIEWUSER ? VIEWUSER.email : CU.email;
   const raw = gDB().photos[email];
   const list = (Array.isArray(raw)?raw:[]).filter(e=>e&&e.date).sort((a,b)=>b.date.localeCompare(a.date));
+
+  // Coach viewing a client = view only (no upload into their account from this screen)
+  const uploadCard = document.getElementById('photoUploadCard');
+  const datePick = document.getElementById('photoDateDisp');
+  if(uploadCard){
+    if(VIEWUSER){
+      uploadCard.style.display = 'none';
+    } else {
+      uploadCard.style.display = 'block';
+    }
+  }
+  // label gallery
+  const galLbl = document.getElementById('photoGalleryLabel');
+  if(galLbl){
+    galLbl.textContent = VIEWUSER
+      ? ('History — '+VIEWUSER.name+' ('+list.length+' set'+(list.length===1?'':'s')+')')
+      : ('History ('+list.length+' set'+(list.length===1?'':'s')+')');
+  }
+
   renderPhotoCompare();
-  if(!list.length){ card.style.display='none'; return; }
+  if(!list.length){
+    card.style.display='block';
+    container.innerHTML = VIEWUSER
+      ? '<div style="font-size:13px;color:var(--gry);padding:12px 0">No progress photos from this client yet.</div>'
+      : '<div style="font-size:13px;color:var(--gry);padding:12px 0">No photo sets yet — upload front / side / back above.</div>';
+    return;
+  }
   card.style.display='block';
 
   container.innerHTML = list.map((entry,i)=>{
