@@ -2175,20 +2175,32 @@ function renderAdminRiskAndBulk(){
   const d = gDB();
   const approved = Object.values(d.users||{}).filter(u=>u.role!=='admin' && u.status==='approved');
   const risks = [];
+  function ciForUser(u){
+    const keys = [u.email, (u.email||'').toLowerCase(), u.id].filter(Boolean);
+    for(const k of keys){
+      if(Array.isArray(d.checkins[k])) return d.checkins[k];
+    }
+    // fallback: match any checkins doc id to email field
+    const hit = Object.entries(d.checkins||{}).find(([id,list])=>{
+      return (id||'').toLowerCase()===(u.email||'').toLowerCase() && Array.isArray(list);
+    });
+    return hit ? hit[1] : [];
+  }
   approved.forEach(u=>{
-    const ci = Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
+    const ci = ciForUser(u);
     const last = lastCheckinDate(ci);
     const gap = daysSinceDate(last);
     const adh = adherencePct(u,14);
     const reasons = [];
-    if(!last || gap>=3) reasons.push(!last?'no check-ins':`no check-in ${gap}d`);
-    if(adh < 40 && ci.length) reasons.push(`low adherence ${adh}%`);
+    // 2+ days without a check-in (or never) → needs attention
+    if(!last || gap>=2) reasons.push(!last?'no check-ins yet':`no check-in ${gap}d`);
+    if(adh < 50 && ci.length>=3) reasons.push(`low adherence ${adh}%`);
     if(ci.length>=2){
       const sorted=[...ci].sort((a,b)=>a.date.localeCompare(b.date));
       const a=sorted[sorted.length-1], b=sorted[Math.max(0,sorted.length-4)];
       if(a&&b&&a.weight!=null&&b.weight!=null && (a.weight-b.weight)>=1.5) reasons.push(`weight +${(a.weight-b.weight).toFixed(1)}kg`);
     }
-    if(reasons.length) risks.push({u, reasons, gap, adh});
+    if(reasons.length) risks.push({u, reasons, gap: gap==null?999:gap, adh});
   });
   risks.sort((a,b)=>b.gap-a.gap);
   // Who hasn't logged a check-in today
@@ -2213,7 +2225,7 @@ function renderAdminRiskAndBulk(){
 
   if(panel){
     const nlOpen = isAdminSectionOpen('notLogged', notToday.length>0);
-    const naOpen = isAdminSectionOpen('needsAtt', risks.length>0);
+    const naOpen = isAdminSectionOpen('needsAtt', true); // always show by default (not night-only)
     let html = '';
     // Daily reminder list — only clients with NO check-in today
     html += `<div class="risk-panel" style="border-color:rgba(255,184,0,.4);margin-bottom:10px">
@@ -2256,7 +2268,7 @@ function renderAdminRiskAndBulk(){
         <span id="needsAttChev" style="color:var(--grn);font-weight:800">${naOpen?'▾':'›'}</span>
       </div>
       <div id="needsAttBody" style="display:${naOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Missed several days, low adherence, or weight trend up.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Anytime — not only at night. Shows clients with no check-in for 2+ days, low adherence, or weight up ~1.5kg.</div>
         ${risks.length? risks.slice(0,12).map(r=>`
           <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
