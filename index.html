@@ -1283,7 +1283,13 @@ function startDataListeners(){
     // ── ADMIN: full collection listeners ──
     unsubscribers.push(fdb.collection('users').onSnapshot(snap=>{
       const users={};
-      snap.forEach(doc=>users[doc.id]=doc.data());
+      snap.forEach(doc=>{
+        const data = doc.data()||{};
+        // Normalize status so Approve sticks in the UI
+        if(data.status) data.status = String(data.status).toLowerCase().trim();
+        if(data.email) data.email = String(data.email).toLowerCase().trim();
+        users[doc.id]=data;
+      });
       CACHE.users=users;
       fbReady=true;
       onDataUpdate();
@@ -3732,13 +3738,63 @@ const renderAdmin = requireAdmin(function renderAdmin(){
 
 });
 
+let _approvingEmail = null;
 const approveUser = requireAdmin(async function approveUser(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email){ toast('Missing email','r'); return; }
+  if(_approvingEmail === email){ toast('Already approving…','a'); return; }
+
+  // Resolve actual Firestore doc id (sometimes casing / id differs from email field)
+  let docId = email;
+  if(!CACHE.users[docId]){
+    const match = Object.entries(CACHE.users||{}).find(([id,u])=> (u && (u.email||id)||'').toLowerCase()===email);
+    if(match) docId = match[0];
+  }
+  const prev = CACHE.users[docId] || CACHE.users[email];
+  if(prev && prev.status==='approved'){
+    toast(email+' is already approved','g');
+    try{ renderAdmin(); }catch(e){}
+    return;
+  }
+
+  _approvingEmail = email;
   try{
-    await fdb.collection('users').doc(email).update({status:'approved'});
-    if(CACHE.users[email])CACHE.users[email].status='approved';
-    toast('✅ '+email+' approved','g');
-    renderAdmin();
-  }catch(e){console.error(e);toast('⚠️ Could not approve — check connection','r');}
+    // set+merge is safer than update (works if fields were incomplete)
+    await fdb.collection('users').doc(docId).set({
+      status: 'approved',
+      email: email,
+      nudgeReminders: true,
+      approvedAt: Date.now()
+    }, {merge:true});
+
+    if(!CACHE.users[docId]) CACHE.users[docId] = prev || {email:email};
+    CACHE.users[docId].status = 'approved';
+    CACHE.users[docId].email = email;
+    CACHE.users[docId].nudgeReminders = true;
+
+    // Verify from server
+    try{
+      const snap = await fdb.collection('users').doc(docId).get();
+      if(snap.exists){
+        CACHE.users[docId] = Object.assign({}, CACHE.users[docId], snap.data());
+        if(CACHE.users[docId].status !== 'approved'){
+          toast('⚠️ Server did not save approval — check Firestore rules for admin update','r');
+          return;
+        }
+      }
+    }catch(e){ console.warn('verify approve', e); }
+
+    toast('✅ '+(prev&&prev.name?prev.name:email)+' approved','g');
+    try{ renderAdmin(); }catch(e){}
+  }catch(e){
+    console.error('approve failed', e);
+    const msg = (e && e.code==='permission-denied')
+      ? 'Permission denied — your admin role may not be set on your user document'
+      : ('Could not approve: '+(e.message||'check connection'));
+    toast('⚠️ '+msg, 'r');
+  }finally{
+    _approvingEmail = null;
+  }
 });
 
 const rejectUser = requireAdmin(async function rejectUser(email){
