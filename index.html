@@ -378,6 +378,12 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .msearch:focus{outline:none;border-color:var(--grn)}
 #adminMemberDetail{margin-top:10px}
 
+
+.risk-panel{background:var(--dark);border:1px solid var(--bdr);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.risk-panel h4{font-size:13px;font-weight:800;margin:0 0 6px;color:var(--wht)}
+.risk-item{font-size:12px;color:var(--txt);padding:8px 0;border-top:1px solid var(--bdr);display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.risk-item:first-of-type{border-top:none}
+
 /* WORKOUT TRACKER */
 .wkt-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .wkt-title-in{flex:1;padding:12px 13px;background:var(--dark2);border:1.5px solid var(--bdr2);border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;color:var(--wht)}
@@ -2224,7 +2230,7 @@ function renderAdminRiskAndBulk(){
   }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
 
   if(panel){
-    const nlOpen = isAdminSectionOpen('notLogged', notToday.length>0);
+    const nlOpen = isAdminSectionOpen('notLogged', true);
     const naOpen = isAdminSectionOpen('needsAtt', true); // always show by default (not night-only)
     let html = '';
     // Daily reminder list — only clients with NO check-in today
@@ -3600,6 +3606,7 @@ function exportUserWeekCSV(email){
 
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
+  try{ renderAdminRiskAndBulk(); }catch(e){ console.error('risk panel', e); }
   const d=gDB();
   const allMembers=Object.values(d.users).filter(u=>u.role!=='admin' && u.status!=='archived');
   const pending=allMembers.filter(u=>u.status==='pending');
