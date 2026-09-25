@@ -3459,9 +3459,60 @@ function renderHistory(){
     } else banner.style.display='none';
   } else if(banner) banner.style.display='none';
 
-  const recent=[...ci].reverse().slice(0,30);
+  const recent=[...ci].reverse(); // full history, newest first
+  const histSub=document.getElementById('histSub');
+  if(histSub){
+    histSub.textContent = recent.length
+      ? (recent.length+' check-in'+(recent.length===1?'':'s')+' · full history')
+      : 'No check-ins yet';
+  }
+
+  // Weekly water summary card
+  let waterWrap=document.getElementById('histWaterWeek');
+  if(!waterWrap){
+    const host=document.getElementById('scr-history');
+    if(host){
+      waterWrap=document.createElement('div');
+      waterWrap.id='histWaterWeek';
+      const sub=host.querySelector('.scr-sub');
+      if(sub&&sub.nextSibling) host.insertBefore(waterWrap, sub.nextSibling);
+      else host.insertBefore(waterWrap, host.children[1]||null);
+    }
+  }
+  if(waterWrap){
+    const start=new Date(); start.setDate(start.getDate()-6);
+    const startStr=start.toISOString().slice(0,10);
+    const week=ci.filter(c=>c&&c.date>=startStr);
+    const withW=week.map(c=>({date:c.date, ml:waterToMl(c.water||0)})).filter(x=>x.ml>0);
+    const target=(typeof userGoals==='function'&&u)?userGoals(u).waterMl:3000;
+    if(!withW.length){
+      waterWrap.innerHTML=`<div class="card" style="margin-bottom:12px"><div class="card-lbl">💧 Water — last 7 days</div><div style="font-size:13px;color:var(--gry)">No water logged this week yet.</div></div>`;
+    } else {
+      const total=withW.reduce((s,x)=>s+x.ml,0);
+      const avg=Math.round(total/withW.length);
+      const daysHit=withW.filter(x=>x.ml>=target).length;
+      const chips=withW.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>{
+        const ok=x.ml>=target;
+        return `<div style="background:#000;border:1px solid ${ok?'rgba(255,214,0,.45)':'#333'};border-radius:10px;padding:8px 10px;min-width:72px;text-align:center">
+          <div style="font-size:9px;font-weight:800;color:#888;text-transform:uppercase">${x.date.slice(5)}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:${ok?'#FFD600':'#FFB800'}">${formatWater(x.ml)}</div>
+        </div>`;
+      }).join('');
+      waterWrap.innerHTML=`<div class="card" style="margin-bottom:12px">
+        <div class="card-lbl">💧 Water — last 7 days</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Avg / day</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${formatWater(avg)}</div></div>
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Days logged</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${withW.length}/7</div></div>
+          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Hit target</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${daysHit}</div></div>
+        </div>
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${chips}</div>
+        <div style="font-size:11px;color:var(--gry);margin-top:8px">Target ${formatWater(target)} / day</div>
+      </div>`;
+    }
+  }
+
   const tb=document.getElementById('histBody');
-  if(!recent.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
+  if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
   tb.innerHTML=recent.map(c=>{
     const proClr=c.protein>=100?'var(--grn)':c.protein>=50?'#F59E0B':'var(--red)';
     const proTxt=c.protein!=null?c.protein+'%':'—';
@@ -3469,10 +3520,13 @@ function renderHistory(){
     const wktTxt=c.workout===true?'✓':c.workout===false?'✗':'—';
     const sqLabels=['😴','😐','🙂','😁'];
     const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
+    const wMl=(c.water!=null&&c.water!=='')?waterToMl(c.water):null;
+    const wTxt=wMl!=null&&wMl>0?formatWater(wMl):'—';
     return `<tr>
       <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
       <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
       <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
+      <td style="color:var(--grn);font-size:11px;font-weight:700;white-space:nowrap">${wTxt}</td>
       <td>${c.sleep??'—'} ${sqTxt}</td><td>${c.hunger??'—'}</td>
       <td style="color:${proClr}">${proTxt}</td>
       <td style="color:${wktClr}">${wktTxt}</td>
