@@ -138,14 +138,14 @@ body{font-family:'Barlow',sans-serif;background:var(--blk);color:var(--txt);min-
 .b-lgt{background:none;border:1px solid var(--bdr2);border-radius:6px;padding:5px 9px;font-family:'Barlow',sans-serif;font-size:11px;font-weight:600;color:var(--gry);cursor:pointer;}
 
 /* TAB BAR */
-.tbar{display:flex;background:var(--dark);border-bottom:1px solid var(--bdr);overflow-x:auto;scrollbar-width:none;position:sticky;top:51px;z-index:99;}
+.tbar{display:flex;background:var(--dark);border-bottom:1px solid var(--bdr);overflow-x:auto;scrollbar-width:none;position:sticky;top:51px;z-index:300;}
 .tbar::-webkit-scrollbar{display:none;}
 .tb{flex:1;min-width:60px;padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;cursor:pointer;color:var(--gry);font-family:'Barlow',sans-serif;border-bottom:2.5px solid transparent;transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent;}
 .tb.active{color:var(--grn);border-bottom-color:var(--grn);}
 .tb-i{font-size:17px;}.tb-l{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
 
 /* SCREENS */
-.scr{display:none;padding:16px 16px 80px;max-width:700px;margin:0 auto;}
+.scr{display:none;padding:16px 16px 100px;max-width:700px;margin:0 auto;position:relative;z-index:1;}
 .scr.active{display:block;}
 .scr-ttl{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;font-style:italic;color:var(--wht);letter-spacing:.03em;margin-bottom:2px;}
 .scr-sub{font-size:12px;color:var(--gry);margin-bottom:18px;}
@@ -220,7 +220,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 #hungR::-webkit-slider-thumb{background:var(--grn);box-shadow:0 0 10px rgba(255,214,0,.35);}
 .rng-mks{display:flex;justify-content:space-between;margin-top:5px;}
 .rmk{font-size:9px;color:var(--gry2);}
-.save-btn{width:100%;padding:15px;border-radius:12px;font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;background:var(--grn);color:#000;border:none;cursor:pointer;box-shadow:var(--grn-glow);transition:all .18s;margin-top:4px;}
+.save-btn{width:100%;padding:15px;border-radius:12px;font-family:'Barlow',sans-serif;font-size:16px;font-weight:700;background:var(--grn);color:#000;border:none;cursor:pointer;box-shadow:var(--grn-glow);transition:all .18s;margin-top:4px;position:relative;z-index:1;}
 .save-btn:active{transform:scale(.97);}
 /* DATE PICKER */
 .date-picker-wrap{background:var(--dark);border:1px solid var(--bdr);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
@@ -792,7 +792,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
     </div>
 
-    <div class="card">
+        <div class="card">
       <div class="card-lbl">Body Metrics</div>
       <div class="ci-row" style="margin-bottom:16px">
         <div><div class="ci-lbl">Weight <span class="ci-lv" id="ciWtL">— kg</span></div><input class="ci-in" type="text" id="ciWt" placeholder="e.g. 82.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="document.getElementById('ciWtL').textContent=this.value?this.value+' kg':'— kg'"></div>
@@ -805,7 +805,8 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
       <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
     </div>
-        <div class="card">
+
+    <div class="card">
       <div class="card-lbl">Sleep</div>
       <div class="ci-grp" style="margin-bottom:0">
         <div class="ci-lbl">Hours last night <span class="ci-lv" id="ciSlL">7.0 hrs</span></div>
@@ -814,7 +815,8 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
     </div>
 
-    <div class="card"> <span class="ci-lv" id="ciWaterL">0 ml</span></div>
+    <div class="card">
+      <div class="card-lbl">Water Intake <span class="ci-lv" id="ciWaterL">0 ml</span></div>
       <div class="water-wrap">
         <div class="water-row">
           <button type="button" class="water-btn" onclick="adjustWater(-250)" aria-label="Minus 250 ml">−250</button>
@@ -835,19 +837,19 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="water-lbl">Target: 3 L (3000 ml) / day · Enter ml or use quick buttons</div>
     </div>
 
-    <!-- Hidden legacy fields (not shown — diet in MyNetDiary, training in Train tab) -->
     <input type="hidden" id="hungR" value="">
     <input type="hidden" id="ciNotes" value="">
-    <div style="display:none" id="legacyCIStubs">
-      <button id="pro0"></button><button id="pro25"></button><button id="pro50"></button><button id="pro75"></button><button id="pro100"></button>
-      <button id="wktNo"></button><button id="wktYes"></button>
-      <button id="sq0"></button><button id="sq1"></button><button id="sq2"></button><button id="sq3"></button>
+    <div style="display:none" id="legacyCIStubs" aria-hidden="true">
+      <button type="button" id="pro0"></button><button type="button" id="pro25"></button><button type="button" id="pro50"></button><button type="button" id="pro75"></button><button type="button" id="pro100"></button>
+      <button type="button" id="wktNo"></button><button type="button" id="wktYes"></button>
+      <button type="button" id="sq0"></button><button type="button" id="sq1"></button><button type="button" id="sq2"></button><button type="button" id="sq3"></button>
       <span id="ciHuL"></span>
     </div>
-    <button class="save-btn" id="saveCIBtn" onclick="saveCI()">🔥 Save Check-in</button>
+
+    <button class="save-btn" id="saveCIBtn" onclick="saveCI()" style="position:relative;z-index:1;margin:8px 0 24px">🔥 Save Check-in</button>
   </div>
 
-  <!-- HISTORY -->
+<!-- HISTORY -->
   <div class="scr" id="scr-history">
     <div class="scr-ttl">HISTORY</div>
     <div class="scr-sub" id="histSub">All check-ins</div>
