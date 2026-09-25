@@ -848,7 +848,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="water-wrap">
         <div class="water-row">
           <button type="button" class="water-btn" onclick="adjustWater(-250)" aria-label="Minus 250 ml">−250</button>
-          <input class="water-input" id="waterMlInput" type="number" min="0" max="10000" step="50" value="0" inputmode="numeric" onchange="setWaterMl(this.value)" oninput="setWaterMl(this.value,true)">
+          <input class="water-input" id="waterMlInput" type="number" min="0" max="10000" step="50" value="0" inputmode="numeric" placeholder="e.g. 2000 for 2L" onchange="setWaterMl(this.value)" oninput="setWaterMl(this.value,true)">
           <span class="water-unit">ml</span>
           <button type="button" class="water-btn" onclick="adjustWater(250)" aria-label="Plus 250 ml">+250</button>
         </div>
@@ -1829,9 +1829,20 @@ function parseDec(v){
 function waterToMl(v){
   if(v==null||v===''||isNaN(Number(v))) return 0;
   v = Number(v);
-  // Old check-ins used whole glasses (typically 0–12)
-  if(v > 0 && v <= 15 && Math.abs(v - Math.round(v)) < 1e-9) return Math.round(v) * WATER_GLASS_ML;
+  // Legacy only: whole numbers 1–12 were "glasses" (250ml each) before ml logging
+  // Anything 100+ is already millilitres (e.g. 2000 = 2 L)
+  if(v > 0 && v <= 12 && Math.abs(v - Math.round(v)) < 1e-9) return Math.round(v) * WATER_GLASS_ML;
   return Math.max(0, Math.round(v));
+}
+function formatWaterShort(ml){
+  ml = Math.max(0, Math.round(Number(ml)||0));
+  if(ml <= 0) return '—';
+  if(ml >= 1000){
+    let litStr = (Math.round((ml/1000)*10)/10).toFixed(1);
+    litStr = litStr.replace(/\.0$/,'');
+    return litStr + ' L';
+  }
+  return ml + ' ml';
 }
 function formatWater(ml){
   ml = Math.max(0, Math.round(Number(ml)||0));
@@ -3201,7 +3212,11 @@ function renderTrend(){
     return;
   }
   // Get values and dates
-  const vals=ci.map(c=>({date:c.date,v:c[trendMetric]||0})).filter(p=>p.v>0);
+  const vals=ci.map(c=>{
+    let v=c[trendMetric];
+    if(trendMetric==='water') v=waterToMl(c.water||0);
+    return {date:c.date,v:v||0};
+  }).filter(p=>p.v>0);
   if(!vals.length){svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">No data for this metric</text>';return;}
   const minV=Math.min(...vals.map(p=>p.v)), maxV=Math.max(...vals.map(p=>p.v));
   const range=maxV-minV||1;
@@ -3223,7 +3238,8 @@ function renderTrend(){
   // Dots for first, last, min, max
   [0,pts.length-1].forEach(i=>{
     svgHTML+=`<circle cx="${pts[i].x}" cy="${pts[i].y}" r="4" fill="${lineColor}"/>`;
-    svgHTML+=`<text x="${pts[i].x}" y="${pts[i].y-7}" text-anchor="middle" font-family="Barlow Condensed" font-size="10" font-weight="700" fill="${lineColor}">${pts[i].v}</text>`;
+    const lab=trendMetric==='water'?formatWaterShort(pts[i].v):pts[i].v;
+    svgHTML+=`<text x="${pts[i].x}" y="${pts[i].y-7}" text-anchor="middle" font-family="Barlow Condensed" font-size="10" font-weight="700" fill="${lineColor}">${lab}</text>`;
   });
   // Baseline ref line
   if(CU&&(trendMetric==='weight'||trendMetric==='waist')){
@@ -3245,7 +3261,8 @@ function renderTrend(){
     const dayN=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
     const wk='W'+(dayN+1);
     if(!weeks[wk])weeks[wk]=[];
-    const v=c[trendMetric];
+    let v=c[trendMetric];
+    if(trendMetric==='water') v=waterToMl(c.water||0);
     if(v)weeks[wk].push(v);
   });
   const wkKeys=Object.keys(weeks).slice(0,12);
@@ -3258,7 +3275,7 @@ function renderTrend(){
     const clr=diff===null?'var(--gry)':parseFloat(diff)<0?(isGoodDown?'var(--grn)':'var(--red)'):(isGoodDown?'var(--red)':'var(--grn)');
     return `<div class="wk-chip">
       <div class="wk-n">${wk}</div>
-      <div class="wk-v">${avg.toFixed(1)}</div>
+      <div class="wk-v">${trendMetric==='water'?formatWaterShort(Math.round(avg)):avg.toFixed(1)}</div>
       <div class="wk-d" style="color:${clr}">${diff!==null?(parseFloat(diff)>0?'+':'')+diff:'base'}</div>
     </div>`;
   }).join('');
@@ -3521,7 +3538,7 @@ function renderHistory(){
     const sqLabels=['😴','😐','🙂','😁'];
     const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
     const wMl=(c.water!=null&&c.water!=='')?waterToMl(c.water):null;
-    const wTxt=wMl!=null&&wMl>0?formatWater(wMl):'—';
+    const wTxt=wMl!=null&&wMl>0?formatWaterShort(wMl):'—';
     return `<tr>
       <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
       <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
