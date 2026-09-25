@@ -557,7 +557,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="sec-tag">What you get</div>
     <div class="sec-ttl">BUILT FOR<br>RESULTS</div>
     <div class="feat-grid">
-      <div class="feat"><div class="feat-i">📊</div><div class="feat-t">Daily Check-ins</div><div class="feat-d">Weight, waist, sleep, steps & hunger every day.</div></div>
+      <div class="feat"><div class="feat-i">📊</div><div class="feat-t">Daily Check-ins</div><div class="feat-d">Weight, waist, sleep, steps & water every day.</div></div>
       <div class="feat"><div class="feat-i">📈</div><div class="feat-t">16-Week Trends</div><div class="feat-d">Weekly averages and progress vs your baseline.</div></div>
       <div class="feat"><div class="feat-i">⚡</div><div class="feat-t">Live Dashboard</div><div class="feat-d">Streak tracking and step speedometer.</div></div>
       <div class="feat"><div class="feat-i">🏋️</div><div class="feat-t">Training Guidance</div><div class="feat-d">Progressive overload support for your stats.</div></div>
@@ -717,7 +717,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
         <div class="met"><div class="met-lbl">Weight <span style="font-weight:600;color:var(--gry);text-transform:none;letter-spacing:0">(7-day avg)</span></div><div class="met-val" id="mW">—<span class="met-unit"> kg</span></div><div class="met-tr" id="mWT"></div></div>
         <div class="met"><div class="met-lbl">Waist <span style="font-weight:600;color:var(--gry);text-transform:none;letter-spacing:0">(7-day avg)</span></div><div class="met-val" id="mWa">—<span class="met-unit"> in</span></div><div class="met-tr" id="mWaT"></div></div>
         <div class="met"><div class="met-lbl">Sleep</div><div class="met-val" id="mSl">—<span class="met-unit"> hrs</span></div><div class="met-tr" id="mSlT"></div></div>
-        <div class="met"><div class="met-lbl">Hunger</div><div class="met-val" id="mHu">—<span class="met-unit">/10</span></div><div class="met-tr" id="mHuT" style="font-size:11px;color:var(--gry)"></div></div>
+        <div class="met"><div class="met-lbl">Water</div><div class="met-val" id="mHu">—<span class="met-unit"></span></div><div class="met-tr" id="mHuT" style="font-size:11px;color:var(--gry)"></div></div>
       </div>
 
       <!-- SPEEDOMETER -->
@@ -769,7 +769,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- CHECK-IN -->
   <div class="scr" id="scr-checkin">
     <div class="scr-ttl">DAILY CHECK-IN</div>
-    <div class="scr-sub">Log your metrics — select today or a past date</div>
+    <div class="scr-sub">Weight, waist, steps, sleep &amp; water — keep it simple</div>
 
     <!-- DATE PICKER -->
     <div class="date-picker-wrap">
@@ -805,46 +805,16 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
       <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
     </div>
-    <div class="card">
-      <div class="card-lbl">Sleep & Hunger</div>
-      <div class="ci-grp">
-        <div class="ci-lbl">Sleep hours <span class="ci-lv" id="ciSlL">7.0 hrs</span></div>
+        <div class="card">
+      <div class="card-lbl">Sleep</div>
+      <div class="ci-grp" style="margin-bottom:0">
+        <div class="ci-lbl">Hours last night <span class="ci-lv" id="ciSlL">7.0 hrs</span></div>
         <input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'">
         <div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div>
-        <div class="ci-lbl" style="margin-top:12px">Sleep quality</div>
-        <div class="sleep-qual-row">
-          <button class="sq-btn sel-red" id="sq0" onclick="setSleepQual(0)">😴<br>Poor</button>
-          <button class="sq-btn" id="sq1" onclick="setSleepQual(1)">😐<br>Fair</button>
-          <button class="sq-btn" id="sq2" onclick="setSleepQual(2)">🙂<br>Good</button>
-          <button class="sq-btn" id="sq3" onclick="setSleepQual(3)">😁<br>Great</button>
-        </div>
       </div>
-      <div class="ci-grp" style="margin-bottom:0"><div class="ci-lbl">Hunger level <span class="ci-lv" id="ciHuL" style="color:var(--grn)">5</span></div><input type="range" id="hungR" min="1" max="10" step="1" value="5" oninput="onHu(this.value)"><div class="rng-mks"><span class="rmk">1 Full</span><span class="rmk">5 Moderate</span><span class="rmk">10 Starving</span></div></div>
-    </div>
-    <div class="card"><div class="card-lbl">Notes (optional)</div><textarea class="ci-in" id="ciNotes" rows="3" placeholder="How did today feel?" style="resize:vertical;font-family:'Barlow',sans-serif;font-size:14px;line-height:1.5"></textarea></div>
-
-    <div class="card">
-      <div class="card-lbl">Habit Compliance</div>
-
-      <div class="ci-lbl" style="margin-bottom:4px">🥩 Protein target — how well did you hit it?</div>
-      <div class="comp-row">
-        <button class="comp-btn" id="pro0" onclick="setProtein(0)">🔴<br>0%<br><span style="font-size:9px;font-weight:400">Off plan</span></button>
-        <button class="comp-btn" id="pro25" onclick="setProtein(25)">🟡<br>25%<br><span style="font-size:9px;font-weight:400">Struggled</span></button>
-        <button class="comp-btn" id="pro50" onclick="setProtein(50)">🟡<br>50%<br><span style="font-size:9px;font-weight:400">Halfway</span></button>
-        <button class="comp-btn" id="pro75" onclick="setProtein(75)">🟢<br>75%<br><span style="font-size:9px;font-weight:400">Close</span></button>
-        <button class="comp-btn" id="pro100" onclick="setProtein(100)">🟢<br>100%<br><span style="font-size:9px;font-weight:400">On target</span></button>
-      </div>
-
-      <div class="ci-lbl" style="margin-top:14px;margin-bottom:4px">🏋️ Did you train today?</div>
-      <div class="workout-row">
-        <button class="wkt-btn" id="wktNo" onclick="setWorkout(false)">✗ NO</button>
-        <button class="wkt-btn" id="wktYes" onclick="setWorkout(true)">✓ YES</button>
-      </div>
-      <button class="cal-toggle-btn" style="margin-top:10px" onclick="goToWorkoutsFromCI()">📋 Log exercises, sets & reps →</button>
     </div>
 
-    <div class="card">
-      <div class="card-lbl">Water Intake <span class="ci-lv" id="ciWaterL">0 ml</span></div>
+    <div class="card"> <span class="ci-lv" id="ciWaterL">0 ml</span></div>
       <div class="water-wrap">
         <div class="water-row">
           <button type="button" class="water-btn" onclick="adjustWater(-250)" aria-label="Minus 250 ml">−250</button>
@@ -865,6 +835,15 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="water-lbl">Target: 3 L (3000 ml) / day · Enter ml or use quick buttons</div>
     </div>
 
+    <!-- Hidden legacy fields (not shown — diet in MyNetDiary, training in Train tab) -->
+    <input type="hidden" id="hungR" value="">
+    <input type="hidden" id="ciNotes" value="">
+    <div style="display:none" id="legacyCIStubs">
+      <button id="pro0"></button><button id="pro25"></button><button id="pro50"></button><button id="pro75"></button><button id="pro100"></button>
+      <button id="wktNo"></button><button id="wktYes"></button>
+      <button id="sq0"></button><button id="sq1"></button><button id="sq2"></button><button id="sq3"></button>
+      <span id="ciHuL"></span>
+    </div>
     <button class="save-btn" id="saveCIBtn" onclick="saveCI()">🔥 Save Check-in</button>
   </div>
 
@@ -883,7 +862,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
-        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Water</th><th>Sleep</th><th>Hung</th><th>Pro</th><th>Wkt</th></tr></thead>
+        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Water</th><th>Sleep</th></tr></thead>
         <tbody id="histBody"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr></tbody></table>
       </div>
     </div>
@@ -1669,7 +1648,7 @@ function pickDate(ds){
     if(existing.waist){document.getElementById('ciWa').value=existing.waist;document.getElementById('ciWaL').textContent=existing.waist+' in';}
     document.getElementById('ciSt').value=existing.steps||'';document.getElementById('ciStL').textContent=(existing.steps||0).toLocaleString();
     document.getElementById('sleepR').value=existing.sleep||7;document.getElementById('ciSlL').textContent=(existing.sleep||7)+' hrs';
-    document.getElementById('hungR').value=existing.hunger||5;onHu(existing.hunger||5);
+    try{ const hr=document.getElementById('hungR'); if(hr && hr.type!=='hidden'){ hr.value=existing.hunger||5; if(typeof onHu==='function') onHu(existing.hunger||5);} }catch(e){}
     document.getElementById('ciNotes').value=existing.notes||'';
     proteinPct=existing.protein??null;workoutDone=existing.workout??null;sleepQual=existing.sleepQual??null;
     renderHabits();
@@ -2079,7 +2058,7 @@ function renderRemindPrompt(u){
   wrap.style.display='block';
   wrap.innerHTML = `<div class="alert-card info">
     <strong>🔔 Turn on daily reminders</strong><br>
-    Your coach recommends: <strong>6:30am</strong> weight &amp; waist · <strong>9:00pm</strong> protein, water &amp; steps
+    Your coach recommends: <strong>6:30am</strong> weight &amp; waist · <strong>9:00pm</strong> water &amp; steps
     <div class="alert-actions">
       <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders();dismissRemindPrompt(true)">Enable reminders</button>
       <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="dismissRemindPrompt(false)">Not now</button>
@@ -2109,14 +2088,14 @@ function renderTodayScorecard(u, ci){
   const waOk = !!(todayEntry && todayEntry.waist!=null && todayEntry.waist!=='');
   const water = todayEntry ? waterToMl(todayEntry.water||0) : 0;
   const steps = todayEntry ? (todayEntry.steps||0) : 0;
-  const protein = todayEntry && todayEntry.protein!=null ? Number(todayEntry.protein) : null;
+  const sleep = todayEntry && todayEntry.sleep!=null ? Number(todayEntry.sleep) : null;
   const wPct = Math.min(100, Math.round((water / g.waterMl) * 100));
   const sPct = Math.min(100, Math.round((steps / g.steps) * 100));
-  const pTxt = protein==null ? '—' : (protein + '%');
+  const slPct = sleep==null ? 0 : Math.min(100, Math.round((sleep / g.sleep) * 100));
   const waterCls = wPct>=100 ? 'ok' : (water>0 ? 'mid' : 'miss');
   const stepsCls = sPct>=100 ? 'ok' : (steps>0 ? 'mid' : 'miss');
-  const protCls = protein==null ? 'miss' : (protein>=80 ? 'ok' : 'mid');
-  const done = [wtOk, waOk, wPct>=100, sPct>=100, protein!=null && protein>=80].filter(Boolean).length;
+  const sleepCls = sleep==null ? 'miss' : (slPct>=100 ? 'ok' : 'mid');
+  const done = [wtOk, waOk, wPct>=100, sPct>=100, sleep!=null].filter(Boolean).length;
   wrap.style.display='block';
   wrap.innerHTML = `<div class="score-card-wrap">
     <div class="score-hd">
@@ -2126,9 +2105,9 @@ function renderTodayScorecard(u, ci){
     <div class="score-strip">
       <div class="score-cell ${wtOk?'ok':'miss'}"><div class="sc-k">Weight</div><div class="sc-v">${wtOk?'✓':'—'}</div><div class="sc-foot">${wtOk?'logged':'log am'}</div></div>
       <div class="score-cell ${waOk?'ok':'miss'}"><div class="sc-k">Waist</div><div class="sc-v">${waOk?'✓':'—'}</div><div class="sc-foot">${waOk?'logged':'log am'}</div></div>
-      <div class="score-cell ${waterCls}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div><div class="sc-foot">${formatWater(water)}</div></div>
+      <div class="score-cell ${waterCls}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div><div class="sc-foot">${formatWaterShort(water)}</div></div>
       <div class="score-cell ${stepsCls}"><div class="sc-k">Steps</div><div class="sc-v">${sPct}%</div><div class="sc-foot">${Number(steps).toLocaleString()}</div></div>
-      <div class="score-cell ${protCls}"><div class="sc-k">Protein</div><div class="sc-v">${pTxt}</div><div class="sc-foot">${protein==null?'log pm':(protein>=80?'on target':'push it')}</div></div>
+      <div class="score-cell ${sleepCls}"><div class="sc-k">Sleep</div><div class="sc-v">${sleep==null?'—':sleep+'h'}</div><div class="sc-foot">${sleep==null?'log':'target '+g.sleep+'h'}</div></div>
     </div>
   </div>`;
 }
@@ -2351,8 +2330,9 @@ async function saveCI(){
   const wa=waistToStorage(document.getElementById('ciWa').value, _waUnit);
   const st=parseInt(document.getElementById('ciSt').value)||0;
   const sl=parseFloat(document.getElementById('sleepR').value);
-  const hu=parseInt(document.getElementById('hungR').value);
-  const no=document.getElementById('ciNotes').value.trim();
+  // Simplified check-in: no hunger / protein / workout checkbox / notes
+  // (diet → MyNetDiary · training → Train tab)
+  const hu=null, no='', proteinPct=null, workoutDone=null, sleepQual=null;
   if(!wt||isNaN(wt)){toast('Please enter your weight','r');return;}
   if(!wa||isNaN(wa)){toast('Please enter your waist','r');return;}
   const t=selectedDate||today();
@@ -3409,8 +3389,20 @@ function renderDash(){
   setMet('mW','mWT',last.weight,'kg',prev?.weight,true);
   setMet('mWa','mWaT',last.waist,'in',prev?.waist,true);
   setMet('mSl','mSlT',last.sleep,'hrs',prev?.sleep,false);
-  setMet('mHu','mHuT',last.hunger,'/10',prev?.hunger,true);
-  document.getElementById('mHuT').textContent=HU_LBL[last.hunger]||'';
+  try{
+    const wMl = waterToMl(last.water||0);
+    const prevW = prev ? waterToMl(prev.water||0) : null;
+    const el=document.getElementById('mHu');
+    const tr=document.getElementById('mHuT');
+    if(el) el.innerHTML = (wMl?formatWaterShort(wMl):'—') + '<span class="met-unit"></span>';
+    if(tr){
+      if(prevW!=null && wMl){
+        const d=wMl-prevW;
+        tr.textContent = (d>0?'+':'')+formatWaterShort(Math.abs(d))+' vs prior';
+        tr.style.color = d>=0?'var(--grn)':'var(--red)';
+      } else tr.textContent='';
+    }
+  }catch(e){}
   renderSpeedo(last.steps||0);
   renderTrend();
   // 7-day progress
@@ -3531,12 +3523,6 @@ function renderHistory(){
   const tb=document.getElementById('histBody');
   if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
   tb.innerHTML=recent.map(c=>{
-    const proClr=c.protein>=100?'var(--grn)':c.protein>=50?'#F59E0B':'var(--red)';
-    const proTxt=c.protein!=null?c.protein+'%':'—';
-    const wktClr=c.workout===true?'var(--grn)':c.workout===false?'var(--red)':'var(--gry)';
-    const wktTxt=c.workout===true?'✓':c.workout===false?'✗':'—';
-    const sqLabels=['😴','😐','🙂','😁'];
-    const sqTxt=c.sleepQual!=null?sqLabels[c.sleepQual]:'—';
     const wMl=(c.water!=null&&c.water!=='')?waterToMl(c.water):null;
     const wTxt=wMl!=null&&wMl>0?formatWaterShort(wMl):'—';
     return `<tr>
@@ -3544,9 +3530,7 @@ function renderHistory(){
       <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
       <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
       <td style="color:var(--grn);font-size:11px;font-weight:700;white-space:nowrap">${wTxt}</td>
-      <td>${c.sleep??'—'} ${sqTxt}</td><td>${c.hunger??'—'}</td>
-      <td style="color:${proClr}">${proTxt}</td>
-      <td style="color:${wktClr}">${wktTxt}</td>
+      <td>${c.sleep!=null?c.sleep+'h':'—'}</td>
     </tr>`;
   }).join('');
 }
