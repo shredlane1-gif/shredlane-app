@@ -1109,6 +1109,27 @@ function requireAdmin(fn){
     return fn.apply(this,args);
   };
 }
+function normalizeStatus(s){
+  s = String(s==null?'':s).toLowerCase().trim();
+  if(s==='approve'||s==='active'||s==='member') return 'approved';
+  if(s==='pend'||s==='waiting') return 'pending';
+  if(s==='archive'||s==='archived'||s==='inactive') return 'archived';
+  return s || 'pending';
+}
+/** Find the real Firestore users/{docId} for an email (handles casing / id mismatch) */
+function resolveUserDocId(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email) return email;
+  const users = CACHE.users||{};
+  if(users[email]) return email;
+  for(const id of Object.keys(users)){
+    if(id.toLowerCase()===email) return id;
+    const u = users[id];
+    if(u && String(u.email||'').toLowerCase()===email) return id;
+  }
+  return email;
+}
+
 function mapAuthError(e){
   const codes={
     'auth/user-not-found':'No account found with this email.',
@@ -1272,9 +1293,8 @@ function startDataListeners(){
       const users={};
       snap.forEach(doc=>{
         const data = doc.data()||{};
-        // Normalize status so Approve sticks in the UI
-        if(data.status) data.status = String(data.status).toLowerCase().trim();
-        if(data.email) data.email = String(data.email).toLowerCase().trim();
+        data.status = normalizeStatus(data.status);
+        data.email = String(data.email||doc.id).toLowerCase().trim();
         users[doc.id]=data;
       });
       CACHE.users=users;
@@ -3665,7 +3685,21 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
   try{ renderAdminRiskAndBulk(); }catch(e){ console.error('risk panel', e); }
   const d=gDB();
-  const allMembers=Object.values(d.users).filter(u=>u.role!=='admin' && u.status!=='archived');
+  // Dedupe by email (avoid double entries from casing/id mismatch). Prefer approved > pending.
+  const byEmail={};
+  Object.entries(d.users||{}).forEach(([id,u])=>{
+    if(!u || u.role==='admin') return;
+    const st = normalizeStatus(u.status);
+    if(st==='archived') return;
+    const em = String(u.email||id).toLowerCase().trim();
+    const row = Object.assign({}, u, {email:em, status:st, _docId:id});
+    const prev = byEmail[em];
+    if(!prev){ byEmail[em]=row; return; }
+    // Prefer approved over pending
+    if(prev.status==='pending' && st==='approved') byEmail[em]=row;
+    else if(prev.status===st && (u.approvedAt||0)>=(prev.approvedAt||0)) byEmail[em]=row;
+  });
+  const allMembers=Object.values(byEmail);
   const pending=allMembers.filter(u=>u.status==='pending');
   const approved=allMembers.filter(u=>u.status==='approved');
   const allCI=Object.values(d.checkins).map(v=>Array.isArray(v)?v.filter(e=>e&&e.date):[]).flat();
@@ -3720,7 +3754,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     try{
       const meta=memberMeta(u);
       const col=COLORS[i%COLORS.length];
-      const isPend=u.status==='pending';
+      const isPend=normalizeStatus(u.status)==='pending';
       const open = (window._adminOpenEmail===u.email);
       let ago='never';
       if(meta.lastAct){
@@ -3740,7 +3774,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   function memberDetail(u,i){
     const meta=memberMeta(u);
     const {ci,streak,last}=meta;
-    const isPend=u.status==='pending';
+    const isPend=normalizeStatus(u.status)==='pending';
     const id=u.email.replace(/[^a-zA-Z0-9]/g,'_');
     const progOptions=(typeof allPrograms==='function'?allPrograms():[]).map(p=>`<option value="${p.id}" ${u.programId===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
     const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
@@ -3820,22 +3854,17 @@ const approveUser = requireAdmin(async function approveUser(email){
   if(!email){ toast('Missing email','r'); return; }
   if(_approvingEmail === email){ toast('Already approving…','a'); return; }
 
-  // Resolve actual Firestore doc id (sometimes casing / id differs from email field)
-  let docId = email;
-  if(!CACHE.users[docId]){
-    const match = Object.entries(CACHE.users||{}).find(([id,u])=> (u && (u.email||id)||'').toLowerCase()===email);
-    if(match) docId = match[0];
-  }
-  const prev = CACHE.users[docId] || CACHE.users[email];
-  if(prev && prev.status==='approved'){
-    toast(email+' is already approved','g');
+  // ALWAYS use the existing Firestore document id (do not create a second doc)
+  const docId = resolveUserDocId(email);
+  const prev = CACHE.users[docId] || Object.values(CACHE.users||{}).find(u=>String((u&&u.email)||'').toLowerCase()===email);
+  if(prev && normalizeStatus(prev.status)==='approved'){
+    toast((prev.name||email)+' is already approved','g');
     try{ renderAdmin(); }catch(e){}
     return;
   }
 
   _approvingEmail = email;
   try{
-    // set+merge is safer than update (works if fields were incomplete)
     await fdb.collection('users').doc(docId).set({
       status: 'approved',
       email: email,
@@ -3843,29 +3872,49 @@ const approveUser = requireAdmin(async function approveUser(email){
       approvedAt: Date.now()
     }, {merge:true});
 
-    if(!CACHE.users[docId]) CACHE.users[docId] = prev || {email:email};
+    if(!CACHE.users[docId]) CACHE.users[docId] = Object.assign({}, prev||{}, {email:email});
     CACHE.users[docId].status = 'approved';
     CACHE.users[docId].email = email;
     CACHE.users[docId].nudgeReminders = true;
 
-    // Verify from server
+    // If a duplicate pending doc exists under another id, approve that too
     try{
-      const snap = await fdb.collection('users').doc(docId).get();
-      if(snap.exists){
-        CACHE.users[docId] = Object.assign({}, CACHE.users[docId], snap.data());
-        if(CACHE.users[docId].status !== 'approved'){
-          toast('⚠️ Server did not save approval — check Firestore rules for admin update','r');
-          return;
+      for(const [id,u] of Object.entries(CACHE.users||{})){
+        if(id===docId) continue;
+        const em = String((u&&u.email)||id).toLowerCase();
+        if(em===email && normalizeStatus(u.status)==='pending'){
+          await fdb.collection('users').doc(id).set({status:'approved', email:email},{merge:true});
+          CACHE.users[id].status = 'approved';
         }
       }
-    }catch(e){ console.warn('verify approve', e); }
+    }catch(e){ console.warn('dup approve', e); }
+
+    // Server verify
+    try{
+      const snap = await fdb.collection('users').doc(docId).get({source:'server'});
+      if(snap.exists){
+        const data = snap.data()||{};
+        data.status = normalizeStatus(data.status);
+        CACHE.users[docId] = Object.assign({}, CACHE.users[docId], data);
+        if(CACHE.users[docId].status !== 'approved'){
+          toast('⚠️ Approval did not stick on server — check that your user has role: admin in Firestore','r');
+          return;
+        }
+      } else {
+        toast('⚠️ User document not found: '+docId,'r');
+        return;
+      }
+    }catch(e){
+      // Offline or source:server unavailable — still OK if local write queued
+      console.warn('verify approve', e);
+    }
 
     toast('✅ '+(prev&&prev.name?prev.name:email)+' approved','g');
     try{ renderAdmin(); }catch(e){}
   }catch(e){
     console.error('approve failed', e);
     const msg = (e && e.code==='permission-denied')
-      ? 'Permission denied — your admin role may not be set on your user document'
+      ? 'Permission denied — open Firestore → users → YOUR email → set role to admin'
       : ('Could not approve: '+(e.message||'check connection'));
     toast('⚠️ '+msg, 'r');
   }finally{
