@@ -3620,6 +3620,7 @@ function applyAdminSection(key, open){
     needsAtt: ['needsAttBody','needsAttChev'],
     bulkMsg: ['bulkMsgBody','bulkMsgChev'],
     photoMiss: ['photoMissBody','photoMissChev'],
+    archived: ['archivedBody','archivedChev'],
     programs: [null, null]
   };
   const ids = map[key];
@@ -3670,12 +3671,17 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   const d=gDB();
   // Dedupe by email (avoid double entries from casing/id mismatch). Prefer approved > pending.
   const byEmail={};
+  const byArchived={};
   Object.entries(d.users||{}).forEach(([id,u])=>{
     if(!u || u.role==='admin') return;
     const st = normalizeStatus(u.status);
-    if(st==='archived') return;
     const em = String(u.email||id).toLowerCase().trim();
     const row = Object.assign({}, u, {email:em, status:st, _docId:id});
+    if(st==='archived'){
+      const prev=byArchived[em];
+      if(!prev || (u.archivedAt||0)>=(prev.archivedAt||0)) byArchived[em]=row;
+      return;
+    }
     const prev = byEmail[em];
     if(!prev){ byEmail[em]=row; return; }
     // Prefer approved over pending
@@ -3685,6 +3691,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   const allMembers=Object.values(byEmail);
   const pending=allMembers.filter(u=>u.status==='pending');
   const approved=allMembers.filter(u=>u.status==='approved');
+  const archived=Object.values(byArchived).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const allCI=Object.values(d.checkins).map(v=>Array.isArray(v)?v.filter(e=>e&&e.date):[]).flat();
   const ml=document.getElementById('membersList');
   const avgWt=allCI.filter(c=>c&&c.weight).length
@@ -3821,10 +3828,34 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   } else html+=`<div style="font-size:12px;color:var(--gry);padding:8px 0 4px">✅ No pending join requests</div>`;
   html+=`<div style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--grn);margin:16px 0 8px;padding:8px 12px;background:rgba(255,214,0,.06);border-left:3px solid var(--grn);border-radius:4px">✅ Members (${approvedF.length}) · tap a name</div>`;
   html+=approvedF.length?approvedF.map((u,i)=>memberRow(u,pending.length+i)).join(''):`<div style="font-size:12px;color:var(--gry);padding:8px 0">No approved members yet</div>`;
+
+  // Archived (collapsed by default)
+  const archivedF=archived.filter(matchQ);
+  const arOpen=isAdminSectionOpen('archived', false);
+  html+=`<div class="card" style="margin-top:16px;padding:12px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('archived')">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gry)">📦 Archived (${archivedF.length})</div>
+      <span id="archivedChev" style="color:var(--grn);font-size:14px;font-weight:800">${arOpen?'▾':'›'}</span>
+    </div>
+    <div id="archivedBody" style="display:${arOpen?'block':'none'};margin-top:10px">
+      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Hidden from the main list. Data is kept. Restore to make them active again.</div>
+      ${archivedF.length? archivedF.map((u,i)=>{
+        const when=u.archivedAt?new Date(u.archivedAt).toLocaleDateString():'';
+        return `<div class="mrow" style="cursor:default">
+          <div class="mrow-av" style="background:#444">${escHtml(u.name||'?').charAt(0).toUpperCase()}</div>
+          <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name||u.email)}</div>
+          <div class="mrow-meta">${escHtml(u.email)}${when?' · archived '+when:''}</div></div>
+          <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();restoreUser('${u.email}')">↩ Restore</button>
+        </div>`;
+      }).join('') : '<div style="font-size:12px;color:var(--gry);padding:6px 0">No archived clients</div>'}
+    </div>
+  </div>`;
+
   ml.innerHTML=html;
   try{
     const dOpen=isAdminSectionOpen('demos',false); const pOpen=isAdminSectionOpen('photos',false);
     applyAdminSection('demos',dOpen); applyAdminSection('photos',pOpen);
+    applyAdminSection('archived', isAdminSectionOpen('archived', false));
     if(dOpen && typeof renderAdminDemos==='function') renderAdminDemos();
     if(pOpen && typeof renderAdminMemberPhotos==='function') renderAdminMemberPhotos();
   }catch(e){}
@@ -3920,11 +3951,46 @@ const rejectUser = requireAdmin(async function rejectUser(email){
   }
   if(!confirm('Archive '+email+'? They will be hidden from the main list. Data is kept.'))return;
   try{
-    await fdb.collection('users').doc(email).set({status:'archived', archivedAt:Date.now()},{merge:true});
-    if(CACHE.users[email]) CACHE.users[email].status='archived';
+    const docId = typeof resolveUserDocId==='function' ? resolveUserDocId(email) : email;
+    await fdb.collection('users').doc(docId).set({status:'archived', archivedAt:Date.now()},{merge:true});
+    if(CACHE.users[docId]) CACHE.users[docId].status='archived';
+    else if(CACHE.users[email]) CACHE.users[email].status='archived';
     toast('Client archived','g');
     renderAdmin();
   }catch(e){console.error(e);toast('Could not archive','r');}
+});
+
+const restoreUser = requireAdmin(async function restoreUser(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email){ toast('Missing email','r'); return; }
+  const docId = typeof resolveUserDocId==='function' ? resolveUserDocId(email) : email;
+  if(!confirm('Restore '+email+' to active members?')) return;
+  try{
+    await fdb.collection('users').doc(docId).set({
+      status: 'approved',
+      archivedAt: null,
+      restoredAt: Date.now()
+    }, {merge:true});
+    if(CACHE.users[docId]){
+      CACHE.users[docId].status = 'approved';
+      CACHE.users[docId].archivedAt = null;
+    }
+    // Also fix any duplicate docs with same email
+    try{
+      for(const [id,u] of Object.entries(CACHE.users||{})){
+        if(id===docId) continue;
+        if(String((u&&u.email)||id).toLowerCase()===email && normalizeStatus(u.status)==='archived'){
+          await fdb.collection('users').doc(id).set({status:'approved', archivedAt:null},{merge:true});
+          CACHE.users[id].status='approved';
+        }
+      }
+    }catch(e){}
+    toast('↩ Client restored','g');
+    renderAdmin();
+  }catch(e){
+    console.error(e);
+    toast('Could not restore — check connection / admin role','r');
+  }
 });
 
 async function resetPassword(email){
