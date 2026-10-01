@@ -2108,11 +2108,23 @@ function weekLogCounts(u, ci, wkts){
   const weightAvg = wts.length ? (wts.reduce((s,v)=>s+v,0)/wts.length) : null;
   const waists = weekCI.map(c=>c.waist).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
   const waistAvg = waists.length ? (waists.reduce((s,v)=>s+v,0)/waists.length) : null;
+  // Training % = sessions logged this week / days prescribed on their program
+  let prescribed = 0;
+  if(u && u.workoutsPerWeek) prescribed = Number(u.workoutsPerWeek)||0;
+  if(!prescribed && u && u.programId){
+    const prog = (typeof gDB==='function' ? gDB().programs[u.programId] : null) || (CACHE.programs&&CACHE.programs[u.programId]);
+    if(prog && Array.isArray(prog.days) && prog.days.length) prescribed = prog.days.length;
+  }
+  if(!prescribed) prescribed = 3; // fallback if no program set
+  const workoutsDone = weekW.length;
+  const trainingPct = Math.min(100, Math.round((workoutsDone / prescribed) * 100));
   return {
     startStr, weekCI, weekW,
     daysWeighed, daysWaist, daysStepsLogged, daysStepsMet,
     daysWaterLogged, daysWaterMet, daysSleep,
-    workouts: weekW.length,
+    workouts: workoutsDone,
+    prescribed,
+    trainingPct,
     waterAvg, weightAvg, waistAvg,
     stepsTarget: g.steps||10000, waterTarget: g.waterMl||3000
   };
@@ -2151,7 +2163,7 @@ function renderWeekCountsCard(hostId, u, ci, wkts, opts){
       ${cell('Steps logged', c.daysStepsLogged+'/7', c.daysStepsMet+' hit target')}
       ${cell('Water', c.daysWaterLogged+'/7', (c.daysWaterMet+' hit target')+(wSub?' · '+wSub:''))}
       ${cell('Sleep', c.daysSleep+'/7', '')}
-      ${cell('Workouts', c.workouts, 'Train tab')}
+      ${cell('Training', c.trainingPct+'%', c.workouts+' / '+c.prescribed+' days')}
     </div>
   </div>`;
   return c;
