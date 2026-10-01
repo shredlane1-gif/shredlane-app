@@ -2084,6 +2084,79 @@ async function dismissRemindPrompt(enabled){
   renderDash();
 }
 
+
+/** Last 7 days (including today): counts for coach weekly sheet + client summary */
+function weekWindowStart(){
+  const start=new Date(); start.setDate(start.getDate()-6);
+  return start.toISOString().slice(0,10);
+}
+function weekLogCounts(u, ci, wkts){
+  const g = (typeof userGoals==='function' && u) ? userGoals(u) : {steps:10000, waterMl:3000, sleep:7};
+  const startStr = weekWindowStart();
+  const weekCI = (ci||[]).filter(c=>c && c.date>=startStr);
+  const weekW = (wkts||[]).filter(w=>w && w.date>=startStr);
+  const daysWeighed = weekCI.filter(c=>c.weight!=null && c.weight!=='').length;
+  const daysWaist = weekCI.filter(c=>c.waist!=null && c.waist!=='').length;
+  const daysStepsLogged = weekCI.filter(c=>(c.steps||0)>0).length;
+  const daysStepsMet = weekCI.filter(c=>(c.steps||0)>=(g.steps||10000)).length;
+  const daysWaterLogged = weekCI.filter(c=>waterToMl(c.water||0)>0).length;
+  const daysWaterMet = weekCI.filter(c=>waterToMl(c.water||0)>=(g.waterMl||3000)).length;
+  const daysSleep = weekCI.filter(c=>c.sleep!=null && c.sleep!=='').length;
+  const waterVals = weekCI.map(c=>waterToMl(c.water||0)).filter(v=>v>0);
+  const waterAvg = waterVals.length ? Math.round(waterVals.reduce((s,v)=>s+v,0)/waterVals.length) : 0;
+  const wts = weekCI.map(c=>c.weight).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
+  const weightAvg = wts.length ? (wts.reduce((s,v)=>s+v,0)/wts.length) : null;
+  const waists = weekCI.map(c=>c.waist).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
+  const waistAvg = waists.length ? (waists.reduce((s,v)=>s+v,0)/waists.length) : null;
+  return {
+    startStr, weekCI, weekW,
+    daysWeighed, daysWaist, daysStepsLogged, daysStepsMet,
+    daysWaterLogged, daysWaterMet, daysSleep,
+    workouts: weekW.length,
+    waterAvg, weightAvg, waistAvg,
+    stepsTarget: g.steps||10000, waterTarget: g.waterMl||3000
+  };
+}
+function renderWeekCountsCard(hostId, u, ci, wkts, opts){
+  opts = opts||{};
+  let el = document.getElementById(hostId);
+  if(!el){
+    const parent = opts.parentId ? document.getElementById(opts.parentId) : null;
+    if(!parent) return null;
+    el = document.createElement('div');
+    el.id = hostId;
+    if(opts.insertAfterId){
+      const after = document.getElementById(opts.insertAfterId);
+      if(after && after.parentNode) after.parentNode.insertBefore(el, after.nextSibling);
+      else parent.insertBefore(el, parent.firstChild);
+    } else parent.insertBefore(el, parent.firstChild);
+  }
+  const c = weekLogCounts(u, ci, wkts);
+  const cell = (label, val, sub)=>{
+    return `<div style="flex:1;min-width:72px;background:#000;border:1px solid #222;border-radius:10px;padding:10px 8px;text-align:center">
+      <div style="font-size:9px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.04em">${label}</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600;line-height:1.1;margin-top:4px">${val}</div>
+      ${sub?`<div style="font-size:10px;color:#888;margin-top:2px">${sub}</div>`:''}
+    </div>`;
+  };
+  const wtSub = c.weightAvg!=null ? ('avg '+c.weightAvg.toFixed(1)+' kg') : '';
+  const waSub = c.waistAvg!=null ? ('avg '+c.waistAvg.toFixed(1)+' in') : '';
+  const wSub = c.waterAvg ? ('avg '+formatWaterShort(c.waterAvg)) : '';
+  el.innerHTML = `<div class="card" style="margin-bottom:12px">
+    <div class="card-lbl">${opts.title||'Last 7 days · log counts'}</div>
+    <div style="font-size:11px;color:var(--gry);margin:-6px 0 10px">Since ${c.startStr} · use these numbers for the weekly tracker sheet</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${cell('Weighed', c.daysWeighed+'/7', wtSub)}
+      ${cell('Waist', c.daysWaist+'/7', waSub)}
+      ${cell('Steps logged', c.daysStepsLogged+'/7', c.daysStepsMet+' hit target')}
+      ${cell('Water', c.daysWaterLogged+'/7', (c.daysWaterMet+' hit target')+(wSub?' · '+wSub:''))}
+      ${cell('Sleep', c.daysSleep+'/7', '')}
+      ${cell('Workouts', c.workouts, 'Train tab')}
+    </div>
+  </div>`;
+  return c;
+}
+
 function renderTodayScorecard(u, ci){
   const wrap = document.getElementById('todayScorecard');
   if(!wrap || !u){ if(wrap) wrap.style.display='none'; return; }
@@ -3325,6 +3398,22 @@ function renderDash(){
     } else cn.style.display='none';
   }
 
+  // ── Last 7 days log counts (for weekly sheet + client feedback) ──
+  try{
+    let host = document.getElementById('dashWeekCounts');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'dashWeekCounts';
+      const cont = document.getElementById('dashContent');
+      const after = document.getElementById('coachNoteWrap');
+      if(after && after.parentNode) after.parentNode.insertBefore(host, after.nextSibling);
+      else if(cont) cont.insertBefore(host, cont.firstChild);
+    }
+    renderWeekCountsCard('dashWeekCounts', u, ci, wkts, {
+      title: VIEWUSER ? 'Last 7 days · coach weekly counts' : 'Last 7 days · your log counts'
+    });
+  }catch(e){ console.error('week counts', e); }
+
   // ── Assigned program card ──
   const dp=document.getElementById('dashProgWrap');
   if(dp){
@@ -3481,49 +3570,37 @@ function renderHistory(){
       : 'No check-ins yet';
   }
 
-  // Weekly water summary card
-  let waterWrap=document.getElementById('histWaterWeek');
-  if(!waterWrap){
-    const host=document.getElementById('scr-history');
-    if(host){
-      waterWrap=document.createElement('div');
-      waterWrap.id='histWaterWeek';
-      const sub=host.querySelector('.scr-sub');
-      if(sub&&sub.nextSibling) host.insertBefore(waterWrap, sub.nextSibling);
-      else host.insertBefore(waterWrap, host.children[1]||null);
+  // Weekly log counts (all metrics) + water detail
+  try{
+    const wkts = typeof myWorkouts==='function' ? myWorkouts() : [];
+    renderWeekCountsCard('histWaterWeek', u, ci, wkts, {
+      parentId: 'scr-history',
+      title: 'Last 7 days · log counts'
+    });
+    // Extra water chips under the counts card
+    const c = weekLogCounts(u, ci, wkts);
+    const withW = c.weekCI.map(x=>({date:x.date, ml:waterToMl(x.water||0)})).filter(x=>x.ml>0)
+      .sort((a,b)=>a.date.localeCompare(b.date));
+    let extra = document.getElementById('histWaterChips');
+    if(!extra){
+      extra = document.createElement('div');
+      extra.id = 'histWaterChips';
+      const host = document.getElementById('histWaterWeek');
+      if(host && host.parentNode) host.parentNode.insertBefore(extra, host.nextSibling);
     }
-  }
-  if(waterWrap){
-    const start=new Date(); start.setDate(start.getDate()-6);
-    const startStr=start.toISOString().slice(0,10);
-    const week=ci.filter(c=>c&&c.date>=startStr);
-    const withW=week.map(c=>({date:c.date, ml:waterToMl(c.water||0)})).filter(x=>x.ml>0);
-    const target=(typeof userGoals==='function'&&u)?userGoals(u).waterMl:3000;
-    if(!withW.length){
-      waterWrap.innerHTML=`<div class="card" style="margin-bottom:12px"><div class="card-lbl">💧 Water — last 7 days</div><div style="font-size:13px;color:var(--gry)">No water logged this week yet.</div></div>`;
-    } else {
-      const total=withW.reduce((s,x)=>s+x.ml,0);
-      const avg=Math.round(total/withW.length);
-      const daysHit=withW.filter(x=>x.ml>=target).length;
-      const chips=withW.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>{
-        const ok=x.ml>=target;
+    if(withW.length){
+      const chips = withW.map(x=>{
+        const ok = x.ml >= c.waterTarget;
         return `<div style="background:#000;border:1px solid ${ok?'rgba(255,214,0,.45)':'#333'};border-radius:10px;padding:8px 10px;min-width:72px;text-align:center">
           <div style="font-size:9px;font-weight:800;color:#888;text-transform:uppercase">${x.date.slice(5)}</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:${ok?'#FFD600':'#FFB800'}">${formatWater(x.ml)}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:900;color:${ok?'#FFD600':'#FFB800'}">${formatWaterShort(x.ml)}</div>
         </div>`;
       }).join('');
-      waterWrap.innerHTML=`<div class="card" style="margin-bottom:12px">
-        <div class="card-lbl">💧 Water — last 7 days</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Avg / day</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${formatWater(avg)}</div></div>
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Days logged</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${withW.length}/7</div></div>
-          <div><div style="font-size:10px;color:#888;font-weight:800;text-transform:uppercase">Hit target</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600">${daysHit}</div></div>
-        </div>
+      extra.innerHTML = `<div class="card" style="margin-bottom:12px"><div class="card-lbl">💧 Water by day</div>
         <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${chips}</div>
-        <div style="font-size:11px;color:var(--gry);margin-top:8px">Target ${formatWater(target)} / day</div>
-      </div>`;
-    }
-  }
+        <div style="font-size:11px;color:var(--gry);margin-top:8px">Target ${formatWater(c.waterTarget)} / day</div></div>`;
+    } else if(extra) extra.innerHTML = '';
+  }catch(e){ console.error('hist week', e); }
 
   const tb=document.getElementById('histBody');
   if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
