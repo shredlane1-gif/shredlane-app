@@ -796,12 +796,8 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="card-lbl">Body Metrics</div>
       <div class="ci-row" style="margin-bottom:16px">
         <div><div class="ci-lbl">Weight <span class="ci-lv" id="ciWtL">— kg</span></div><input class="ci-in" type="text" id="ciWt" placeholder="e.g. 82.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="document.getElementById('ciWtL').textContent=this.value?this.value+' kg':'— kg'"></div>
-        <div><div class="ci-lbl">Waist <span class="ci-lv" id="ciWaL">— in</span>
-        <span class="unit-toggle" id="waistUnitToggle">
-          <button type="button" id="wuIn" class="on" onclick="setWaistUnit('in')">in</button>
-          <button type="button" id="wuCm" onclick="setWaistUnit('cm')">cm</button>
-        </span>
-      </div><input class="ci-in" type="text" id="ciWa" placeholder="e.g. 34.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="(function(v){const u=(CU&&userGoals(CU).waistUnit)||'in';document.getElementById('ciWaL').textContent=v?v+' '+u:'— '+u;})(this.value)"></div>
+        <div><div class="ci-lbl">Waist <span class="ci-lv" id="ciWaL">— in</span></div>
+      <input class="ci-in" type="text" id="ciWa" placeholder="e.g. 34.5 in" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off" oninput="document.getElementById('ciWaL').textContent=this.value?this.value+' in':'— in'"></div>
       </div>
       <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Target: 10,000 steps" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px">Target: 10,000 steps/day</div></div>
     </div>
@@ -1676,11 +1672,10 @@ function pickDate(ds){
     renderHabits();
     waterCount=waterToMl(existing.water||0);renderWater();
     try{
-      const wu=userGoals(CU).waistUnit;
-      const bIn=document.getElementById('wuIn'), bCm=document.getElementById('wuCm');
-      if(bIn&&bCm){bIn.classList.toggle('on',wu==='in');bCm.classList.toggle('on',wu==='cm');}
       const waL=document.getElementById('ciWaL');
-      if(waL){const v=document.getElementById('ciWa').value;waL.textContent=v?v+' '+wu:'— '+wu;}
+      if(waL){const v=document.getElementById('ciWa').value;waL.textContent=v?v+' in':'— in';}
+      const tog=document.getElementById('waistUnitToggle');
+      if(tog) tog.style.display='none';
     }catch(e){}
     renderSpeedo(existing.steps||0);
     toast('📋 Existing entry loaded — edit and save to update','a');
@@ -1896,23 +1891,23 @@ function userGoals(u){
     waterMl: Math.max(500, parseInt(u.waterTargetMl,10) || WATER_TARGET_ML || 3000),
     steps: Math.max(1000, parseInt(u.stepsTarget,10) || 10000),
     sleep: Math.max(4, parseFloat(u.sleepTarget) || 7),
-    waistUnit: (u.waistUnit === 'cm') ? 'cm' : 'in'
+    waistUnit: 'in'
   };
 }
 function waistToStorage(val, unit){
   val = parseFloat(val);
   if(isNaN(val)) return null;
-  return unit === 'cm' ? (val / 2.54) : val; // store inches
+  return val; // inches only
 }
 function waistFromStorage(valIn, unit){
   valIn = parseFloat(valIn);
   if(isNaN(valIn)) return '';
-  return unit === 'cm' ? (valIn * 2.54) : valIn;
+  return valIn; // inches only
 }
 function formatWaist(valIn, unit){
   const v = waistFromStorage(valIn, unit);
   if(v===''||v==null||isNaN(v)) return '—';
-  return (unit==='cm' ? Number(v).toFixed(1) + ' cm' : Number(v).toFixed(1) + ' in');
+  return Number(v).toFixed(1) + ' in';
 }
 function daysSinceDate(dateStr){
   if(!dateStr) return 999;
@@ -1968,7 +1963,7 @@ async function saveMyGoals(){
     waterTargetMl: isNaN(w)?3000:w,
     stepsTarget: isNaN(s)?10000:s,
     sleepTarget: isNaN(sl)?7:sl,
-    waistUnit: unit==='cm'?'cm':'in'
+    waistUnit: 'in'
   };
   try{
     await fdb.collection('users').doc(CU.email).set(patch,{merge:true});
@@ -1984,29 +1979,18 @@ async function saveMyGoals(){
   }
 }
 function setWaistUnit(unit){
-  if(!CU) return;
-  const prev = userGoals(CU).waistUnit;
-  CU.waistUnit = unit==='cm'?'cm':'in';
-  try{ fdb.collection('users').doc(CU.email).set({waistUnit:CU.waistUnit},{merge:true}); }catch(e){}
-  if(CACHE.users[CU.email]) CACHE.users[CU.email].waistUnit = CU.waistUnit;
-  cacheProfileLocal(CU);
+  // Inches only — cm option removed
+  if(CU) CU.waistUnit = 'in';
   const bIn=document.getElementById('wuIn'), bCm=document.getElementById('wuCm');
-  if(bIn&&bCm){bIn.classList.toggle('on',CU.waistUnit==='in');bCm.classList.toggle('on',CU.waistUnit==='cm');}
-  const inp = document.getElementById('ciWa');
-  if(inp){
-    // convert currently typed value between units
-    const cur = parseFloat(inp.value);
-    if(!isNaN(cur) && prev !== CU.waistUnit){
-      const asIn = prev==='cm' ? cur/2.54 : cur;
-      inp.value = Number(waistFromStorage(asIn, CU.waistUnit)).toFixed(1);
-      inp.dataset.storageIn = asIn;
-    }
-    const lbl=document.getElementById('ciWaL');
-    if(lbl) lbl.textContent = inp.value ? inp.value+' '+CU.waistUnit : '— '+CU.waistUnit;
-  }
-  renderDash();
-  toast('Waist unit: ' + CU.waistUnit, 'g');
+  if(bIn) bIn.classList.add('on');
+  if(bCm){ bCm.classList.remove('on'); bCm.style.display='none'; }
+  const tog=document.getElementById('waistUnitToggle');
+  if(tog) tog.style.display='none';
+  const lbl=document.getElementById('ciWaL');
+  const inp=document.getElementById('ciWa');
+  if(lbl) lbl.textContent = (inp&&inp.value) ? inp.value+' in' : '— in';
 }
+
 function renderClientAlerts(u, ci){
   const stack = document.getElementById('clientAlertStack');
   if(!stack || !u || VIEWUSER) { if(stack) stack.style.display='none'; return; }
@@ -2348,8 +2332,7 @@ async function saveCI(){
   if(VIEWUSER){ toast('🔒 Coach view is read-only — clients log their own check-ins','a'); return; }
   if(CU.status==='pending'){toast('⏳ Your account is awaiting coach approval — check-ins are locked until then.','a');return;}
   const wt=parseDec(document.getElementById('ciWt').value);
-  const _waUnit=(typeof userGoals==='function'&&CU)?userGoals(CU).waistUnit:'in';
-  const wa=waistToStorage(document.getElementById('ciWa').value, _waUnit);
+  const wa=waistToStorage(document.getElementById('ciWa').value, 'in');
   const st=parseInt(document.getElementById('ciSt').value)||0;
   const sl=parseFloat(document.getElementById('sleepR').value);
   // Simplified check-in: no hunger / protein / workout checkbox / notes
@@ -3799,7 +3782,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
           <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
           <div><div class="fl" style="font-size:10px">Waist unit</div>
-            <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}"><option value="in" ${(u.waistUnit||'in')==='in'?'selected':''}>Inches</option><option value="cm" ${u.waistUnit==='cm'?'selected':''}>cm</option></select>
+            <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}" disabled><option value="in" selected>Inches only</option></select>
           </div>
         </div>
         <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
@@ -4554,7 +4537,7 @@ async function saveCoachTargets(email){
     waterTargetMl: isNaN(water)?3000:water,
     stepsTarget: isNaN(steps)?10000:steps,
     sleepTarget: isNaN(sleep)?7:sleep,
-    waistUnit: unit==='cm'?'cm':'in'
+    waistUnit: 'in'
   };
   try{
     await fdb.collection('users').doc(email).set(payload,{merge:true});
