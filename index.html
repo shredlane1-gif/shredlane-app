@@ -412,6 +412,23 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .wkt-log-title{font-size:15px;font-weight:700;color:var(--wht);margin-top:2px}
 .wkt-log-meta{font-size:11px;color:var(--gry);margin-top:2px}
 .wkt-log-acts{display:flex;gap:6px;flex-shrink:0}
+
+.wkt-week{background:var(--dark);border:1px solid var(--bdr);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.wkt-week-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;cursor:pointer;background:var(--dark2)}
+.wkt-week-hd:active{opacity:.9}
+.wkt-week-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;color:var(--wht);letter-spacing:.02em}
+.wkt-week-meta{font-size:11px;color:var(--gry);margin-top:2px}
+.wkt-week-stat{text-align:right;font-size:11px;color:var(--grn);font-weight:700}
+.wkt-week-body{padding:0 12px 12px;display:none}
+.wkt-week.open .wkt-week-body{display:block}
+.wkt-sess{border-top:1px solid var(--bdr);padding:12px 0}
+.wkt-sess:first-child{border-top:none}
+.wkt-ex-cmp{display:flex;justify-content:space-between;gap:8px;padding:6px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,.04)}
+.wkt-ex-cmp:last-child{border-bottom:none}
+.wkt-delta-up{color:#FF3B30;font-weight:800}
+.wkt-delta-down{color:#7EE000;font-weight:800}
+.wkt-delta-same{color:#666;font-weight:600}
+
 .wkt-icn-btn{background:var(--dark2);border:1px solid var(--bdr2);border-radius:7px;width:30px;height:30px;font-size:13px;color:var(--txt);cursor:pointer;display:flex;align-items:center;justify-content:center}
 .wkt-ex-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--bdr)}
 .wkt-ex-nm{font-size:13px;font-weight:600;color:var(--txt)}
@@ -905,7 +922,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <!-- Exercise progression charts -->
     <div id="exProgWrap" style="margin-top:16px"></div>
 
-    <div class="scr-sub" style="margin-top:18px;margin-bottom:8px">Session history</div>
+    <div class="scr-sub" style="margin-top:18px;margin-bottom:8px">Session history · by week</div>
     <div id="wktHistList"></div>
   </div>
 
@@ -2868,24 +2885,171 @@ function renderWorkoutsScreen(){
     hl.innerHTML='<div class="card wkt-empty">No sessions logged yet.<br><span style="font-size:12px;opacity:.8">Tap <strong>▶ Log this day</strong> on your program above to start.</span></div>';
     return;
   }
-  hl.innerHTML=list.map(w=>{
-    const dstr=new Date(w.date+'T00:00:00').toLocaleDateString('en-KE',{weekday:'short',day:'2-digit',month:'short'});
-    const setCount=w.exercises.reduce((s,ex)=>s+(ex.sets||[]).length,0);
-    return `<div class="wkt-log-card">
-      <div class="wkt-log-top">
-        <div>
-          <div class="wkt-log-date">${dstr}</div>
-          <div class="wkt-log-title">${w.title?escHtml(w.title):(w.exercises[0]?escHtml(w.exercises[0].name):'Workout')}</div>
-          <div class="wkt-log-meta">${w.exercises.length} exercise${w.exercises.length===1?'':'s'} · ${setCount} set${setCount===1?'':'s'}</div>
-        </div>
-        <div class="wkt-log-acts">
-          <button class="wkt-icn-btn" onclick="editWorkout('${w.id}')" title="Edit">✏️</button>
-          <button class="wkt-icn-btn" onclick="deleteWorkout('${w.id}')" title="Delete">🗑️</button>
-        </div>
+  hl.innerHTML=renderWorkoutHistoryByWeek(list);
+}
+
+function workoutVolume(w){
+  let vol=0;
+  (w.exercises||[]).forEach(ex=>{
+    (ex.sets||[]).forEach(s=>{
+      const r=parseFloat(s.reps)||0, wt=parseFloat(s.weight)||0;
+      if(r>0 && wt>0) vol += r*wt;
+    });
+  });
+  return vol;
+}
+function exerciseBest(ex){
+  let bestW=0, bestR=0;
+  (ex.sets||[]).forEach(s=>{
+    const w=parseFloat(s.weight)||0, r=parseFloat(s.reps)||0;
+    if(w>bestW || (w===bestW && r>bestR)){ bestW=w; bestR=r; }
+  });
+  return {weight:bestW, reps:bestR};
+}
+function findPrevSameSession(list, w){
+  // Previous session with same title (for week-to-week lift comparison)
+  const title=(w.title||'').toLowerCase().trim();
+  const sorted=list.slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  const idx=sorted.findIndex(x=>x.id===w.id);
+  for(let i=idx+1;i<sorted.length;i++){
+    const t=(sorted[i].title||'').toLowerCase().trim();
+    if(title && t===title) return sorted[i];
+    // fallback: same weekday pattern not needed
+  }
+  return null;
+}
+function weekKeyFromDate(dateStr){
+  // ISO week starting Monday
+  const d=new Date(dateStr+'T00:00:00');
+  const day=(d.getDay()+6)%7; // Mon=0
+  const mon=new Date(d); mon.setDate(d.getDate()-day);
+  return mon.toISOString().slice(0,10);
+}
+function weekLabel(mondayStr){
+  const mon=new Date(mondayStr+'T00:00:00');
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6);
+  const opts={day:'2-digit',month:'short'};
+  return mon.toLocaleDateString('en-KE',opts)+' – '+sun.toLocaleDateString('en-KE',opts);
+}
+function toggleWktWeek(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.classList.toggle('open');
+}
+function renderWorkoutHistoryByWeek(list){
+  const sorted=list.slice().sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+  // Group by week
+  const weeks={};
+  sorted.forEach(w=>{
+    const k=weekKeyFromDate(w.date);
+    if(!weeks[k]) weeks[k]=[];
+    weeks[k].push(w);
+  });
+  const keys=Object.keys(weeks).sort((a,b)=>b.localeCompare(a));
+  // Week-over-week summary strip (last 4 weeks)
+  const recentKeys=keys.slice(0,4);
+  let strip='';
+  if(recentKeys.length>=1){
+    strip=`<div class="card" style="margin-bottom:12px;padding:12px 14px">
+      <div class="card-lbl" style="margin-bottom:8px">Week by week</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+        ${recentKeys.map((k,i)=>{
+          const sess=weeks[k];
+          const sets=sess.reduce((s,w)=>s+(w.exercises||[]).reduce((s2,ex)=>s2+(ex.sets||[]).length,0),0);
+          const vol=sess.reduce((s,w)=>s+workoutVolume(w),0);
+          const prev=i<recentKeys.length-1?weeks[recentKeys[i+1]]:null;
+          const prevSets=prev?prev.reduce((s,w)=>s+(w.exercises||[]).reduce((s2,ex)=>s2+(ex.sets||[]).length,0),0):null;
+          const setDelta=prevSets!=null?(sets-prevSets):null;
+          return `<div style="min-width:110px;background:#000;border:1px solid #222;border-radius:10px;padding:10px">
+            <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase">${weekLabel(k).split(' – ')[0]}</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600;margin-top:4px">${sess.length}<span style="font-size:12px;color:#888"> sess</span></div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px">${sets} sets</div>
+            ${vol?`<div style="font-size:10px;color:#666">${Math.round(vol).toLocaleString()} kg vol</div>`:''}
+            ${setDelta!=null?`<div style="font-size:10px;margin-top:4px;color:${setDelta>=0?'#7EE000':'#FF3B30'}">${setDelta>=0?'+':''}${setDelta} sets vs prior</div>`:''}
+          </div>`;
+        }).join('')}
       </div>
-      ${w.exercises.map(ex=>`<div class="wkt-ex-row"><span class="wkt-ex-nm">${escHtml(ex.name)}</span><span class="wkt-ex-sets">${(ex.sets||[]).map(s=>(s.reps||'—')+'×'+(s.weight!=null?s.weight+'kg':'BW')).join('  ')}</span></div>`).join('')}
+    </div>`;
+  }
+
+  const html=keys.map((k,wi)=>{
+    const sess=weeks[k].slice().sort((a,b)=>b.date.localeCompare(a.date));
+    const sets=sess.reduce((s,w)=>s+(w.exercises||[]).reduce((s2,ex)=>s2+(ex.sets||[]).length,0),0);
+    const vol=sess.reduce((s,w)=>s+workoutVolume(w),0);
+    const open = wi<2 ? ' open' : ''; // current + previous week open
+    const id='wktWeek_'+k.replace(/-/g,'');
+    const body=sess.map(w=>{
+      const dstr=new Date(w.date+'T00:00:00').toLocaleDateString('en-KE',{weekday:'short',day:'2-digit',month:'short'});
+      const setCount=(w.exercises||[]).reduce((s,ex)=>s+(ex.sets||[]).length,0);
+      const prev=findPrevSameSession(sorted, w);
+      const prevMap={};
+      if(prev){
+        (prev.exercises||[]).forEach(ex=>{
+          const n=(ex.name||'').trim().toLowerCase();
+          if(n) prevMap[n]=exerciseBest(ex);
+        });
+      }
+      const rows=(w.exercises||[]).map(ex=>{
+        const name=(ex.name||'').trim();
+        const best=exerciseBest(ex);
+        const setsStr=(ex.sets||[]).map(s=>{
+          const r=s.reps!=null&&s.reps!==''?s.reps:'—';
+          const wt=s.weight!=null&&s.weight!==''?s.weight+'kg':'BW';
+          return r+'×'+wt;
+        }).join(' · ');
+        let delta='';
+        const pb=prevMap[name.toLowerCase()];
+        if(pb && best.weight>0){
+          const dw=best.weight-pb.weight;
+          const dr=best.reps-pb.reps;
+          if(Math.abs(dw)>=0.25){
+            delta = dw>0
+              ? `<span class="wkt-delta-up">+${dw.toFixed(1)} kg vs last</span>`
+              : `<span class="wkt-delta-down">${dw.toFixed(1)} kg vs last</span>`;
+          } else if(dw===0 && dr!==0){
+            delta = dr>0
+              ? `<span class="wkt-delta-up">+${dr} reps vs last</span>`
+              : `<span class="wkt-delta-down">${dr} reps vs last</span>`;
+          } else if(dw===0 && dr===0){
+            delta = `<span class="wkt-delta-same">same as last</span>`;
+          }
+        }
+        return `<div class="wkt-ex-cmp">
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:700;color:var(--wht)">${escHtml(name)}</div>
+            <div style="font-size:11px;color:var(--gry);margin-top:2px;font-family:DM Mono,monospace">${escHtml(setsStr)}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;font-size:11px;padding-top:2px">${delta}</div>
+        </div>`;
+      }).join('');
+      return `<div class="wkt-sess">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:11px;font-weight:800;color:var(--grn);text-transform:uppercase">${dstr}</div>
+            <div style="font-size:15px;font-weight:700;color:var(--wht)">${w.title?escHtml(w.title):(w.exercises[0]?escHtml(w.exercises[0].name):'Workout')}</div>
+            <div style="font-size:11px;color:var(--gry)">${(w.exercises||[]).length} exercises · ${setCount} sets${prev?' · compared to '+prev.date:''}</div>
+          </div>
+          <div class="wkt-log-acts">
+            <button class="wkt-icn-btn" onclick="event.stopPropagation();editWorkout('${w.id}')" title="Edit">✏️</button>
+            <button class="wkt-icn-btn" onclick="event.stopPropagation();deleteWorkout('${w.id}')" title="Delete">🗑️</button>
+          </div>
+        </div>
+        ${rows}
+      </div>`;
+    }).join('');
+    return `<div class="wkt-week${open}" id="${id}">
+      <div class="wkt-week-hd" onclick="toggleWktWeek('${id}')">
+        <div>
+          <div class="wkt-week-title">${weekLabel(k)}</div>
+          <div class="wkt-week-meta">${sess.length} session${sess.length===1?'':'s'} · ${sets} sets${vol?(' · '+Math.round(vol).toLocaleString()+' kg volume'):''}</div>
+        </div>
+        <div class="wkt-week-stat">${wi===0?'This week':wi===1?'Last week':''} ${open?'▾':'›'}</div>
+      </div>
+      <div class="wkt-week-body">${body}</div>
     </div>`;
   }).join('');
+
+  return strip+html;
 }
 
 // ── Exercise progression (max weight over time for top exercises) ──
