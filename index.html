@@ -1474,7 +1474,7 @@ function onSuccess(user, opts){
   document.getElementById('adminTab').style.display=user.role==='admin'?'flex':'none';
   // Start the correct listeners for this role (admin = full collection, member = own docs only)
   startDataListeners();
-  try{ if(localStorage.getItem('sl_reminders_on')==='1') setupReminders(); }catch(e){}
+  try{ setupReminders(); }catch(e){}
   goTab('dashboard',document.querySelector('.tb'));
   setPhotoDate(today());
   renderDash();
@@ -2013,73 +2013,53 @@ function setWaistUnit(unit){
 }
 
 function renderClientAlerts(u, ci){
+  // Manual in-app nudges removed — weekly coach message covers feedback.
   const stack = document.getElementById('clientAlertStack');
-  if(!stack || !u || VIEWUSER) { if(stack) stack.style.display='none'; return; }
-  // One alert only — highest priority first
-  // 1) Missed / missing check-in  2) Photo (14d)  3) Weekly review
-  let alert = null;
-  const last = lastCheckinDate(ci);
-  const gap = daysSinceDate(last);
-  if(!last){
-    alert = {cls:'warn', html:'📝 <strong>No check-in yet.</strong> Log today to start your streak.',
-      actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Log check-in</button>`};
-  } else if(gap >= 2){
-    alert = {cls:'warn', html:`⏰ <strong>Missed check-in:</strong> last log was ${gap} days ago (${last}).`,
-      actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Check in now</button>`};
-  }
-  // Sunday only: photo nudge (no mid-week photo nag)
-  if(!alert && new Date().getDay() === 0){
-    const lastPhoto = lastPhotoDate(u.email);
-    const photoGap = daysSinceDate(lastPhoto);
-    const needPhoto = !lastPhoto || photoGap >= 5;
-    const dismissedP = localStorage.getItem('sl_photo_prompt_' + today());
-    if(needPhoto && !dismissedP){
-      alert = {cls:'info', html: '📷 <strong>Sunday photo day.</strong> Upload progress photos for your coach.',
-        actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('photosTab'))">Upload photos</button>
-                 <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
-    }
-  }
-  if(!alert){
-    const weekCi = checkinsLastDays(ci, 7);
-    if(weekCi.length >= 5){
-      const dismissed = localStorage.getItem('sl_week_review_' + today());
-      if(!dismissed){
-        const lastW = weekCi[weekCi.length-1];
-        const firstW = weekCi[0];
-        const wChange = (lastW.weight!=null && firstW.weight!=null) ? (lastW.weight - firstW.weight) : null;
-        const msg = encodeURIComponent(`Hi coach — weekly review:\\nCheck-ins this week: ${weekCi.length}\\nWeight change: ${wChange==null?'n/a':(wChange>0?'+':'')+Number(wChange).toFixed(1)+' kg'}\\nThanks!`);
-        alert = {cls:'info', html:`📋 <strong>Weekly review ready.</strong> ${weekCi.length} check-ins in the last 7 days.`,
-          actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="messageCoach(decodeURIComponent('${msg}'))">Send to coach</button>
-                   <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_week_review_'+today(),'1');renderDash()">Dismiss</button>`};
-      }
-    }
-  }
-  if(!alert){ stack.style.display='none'; stack.innerHTML=''; return; }
-  stack.style.display='flex';
-  stack.innerHTML = `<div class="alert-card ${alert.cls}">${alert.html}<div class="alert-actions">${alert.actions||''}</div></div>`;
+  if(stack){ stack.style.display='none'; stack.innerHTML=''; }
 }
 
 
 function renderRemindPrompt(u){
   const wrap = document.getElementById('remindPromptWrap');
-  if(!wrap || !u || VIEWUSER || u.role==='admin'){ if(wrap) wrap.style.display='none'; return; }
-  try{
-    if(localStorage.getItem('sl_reminders_on')==='1'){ wrap.style.display='none'; return; }
-  }catch(e){}
-  if(u.status!=='approved'){ wrap.style.display='none'; return; }
-  // Show if coach just approved (nudgeReminders) OR user has not dismissed
-  let dismissed=false;
-  try{ dismissed = localStorage.getItem('sl_remind_prompt_dismiss')==='1'; }catch(e){}
-  if(!u.nudgeReminders && dismissed){ wrap.style.display='none'; return; }
+  if(!wrap){ try{ ensureDailyReminders(u); }catch(e){} return; }
+  if(!u || VIEWUSER || u.role==='admin' || (u.status && u.status!=='approved')){
+    wrap.style.display='none'; wrap.innerHTML='';
+    return;
+  }
+  if(!('Notification' in window)){
+    wrap.style.display='block';
+    wrap.innerHTML = `<div class="alert-card warn">
+      <strong>🔔 Notifications not supported</strong><br>
+      This browser cannot show daily reminders. Use Chrome or Safari and add Shredlane to your home screen.
+    </div>`;
+    return;
+  }
+  const perm = Notification.permission;
+  if(perm==='granted'){
+    wrap.style.display='none'; wrap.innerHTML='';
+    try{ ensureDailyReminders(u); }catch(e){}
+    return;
+  }
+  // Keep showing until they allow notifications
   wrap.style.display='block';
-  wrap.innerHTML = `<div class="alert-card info">
-    <strong>🔔 Turn on daily reminders</strong><br>
-    Your coach recommends: <strong>6:30am</strong> weight &amp; waist · <strong>9:00pm</strong> water &amp; steps
-    <div class="alert-actions">
-      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders();dismissRemindPrompt(true)">Enable reminders</button>
-      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="dismissRemindPrompt(false)">Not now</button>
-    </div>
-  </div>`;
+  if(perm==='denied'){
+    wrap.innerHTML = `<div class="alert-card warn">
+      <strong>🔔 Turn on notifications</strong><br>
+      Reminders are blocked in your browser settings. Open site settings for Shredlane and allow notifications, then reload.
+      <div class="alert-actions">
+        <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders()">I allowed them — check again</button>
+      </div>
+    </div>`;
+  } else {
+    wrap.innerHTML = `<div class="alert-card info">
+      <strong>🔔 Turn on daily reminders</strong><br>
+      Get a morning and evening prompt to log. This stays here until notifications are on.
+      <div style="font-size:12px;color:var(--gry);margin-top:6px">6:30am weight &amp; waist · 9:00pm steps, water &amp; sleep</div>
+      <div class="alert-actions">
+        <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders()">Enable notifications</button>
+      </div>
+    </div>`;
+  }
 }
 async function dismissRemindPrompt(enabled){
   try{ localStorage.setItem('sl_remind_prompt_dismiss','1'); }catch(e){}
@@ -2112,6 +2092,7 @@ function weekLogCounts(u, ci, wkts){
   const daysWaterLogged = weekCI.filter(c=>waterToMl(c.water||0)>0).length;
   const daysWaterMet = weekCI.filter(c=>waterToMl(c.water||0)>=(g.waterMl||3000)).length;
   const daysSleep = weekCI.filter(c=>c.sleep!=null && c.sleep!=='').length;
+  const daysSleepMet = weekCI.filter(c=>c.sleep!=null && c.sleep!=='' && Number(c.sleep)>=(g.sleep||7)).length;
   const waterVals = weekCI.map(c=>waterToMl(c.water||0)).filter(v=>v>0);
   const waterAvg = waterVals.length ? Math.round(waterVals.reduce((s,v)=>s+v,0)/waterVals.length) : 0;
   const wts = weekCI.map(c=>c.weight).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
@@ -2131,7 +2112,7 @@ function weekLogCounts(u, ci, wkts){
   return {
     startStr, weekCI, weekW,
     daysWeighed, daysWaist, daysStepsLogged, daysStepsMet,
-    daysWaterLogged, daysWaterMet, daysSleep,
+    daysWaterLogged, daysWaterMet, daysSleep, daysSleepMet,
     workouts: workoutsDone,
     prescribed,
     trainingPct,
@@ -3812,7 +3793,6 @@ function renderDash(){
   }
   if(qa&&!VIEWUSER){
     qa.innerHTML=`
-      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="enableReminders()">🔔 Reminders</button>
       <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="messageCoach('Hi coach, quick question from Shredlane')">💬 Message coach</button>
       <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="shareProgressImage()">📲 Share progress</button>`;
   } else if(qa&&VIEWUSER){qa.innerHTML='';}
@@ -4944,34 +4924,95 @@ function dismissPWA(){
   try{localStorage.setItem('pwaDismissed','1');}catch(e){}
 }
 
-// Daily check-in reminder (browser Notification)
-function setupReminders(){
-  if(!('Notification' in window))return;
-  const key='shredlane_remind_'+today();
-  if(localStorage.getItem(key))return;
+// Daily logging reminders (browser Notification — requires one-time permission)
+// Morning 6:30 weight/waist · Evening 21:00 water/steps · only if not fully logged
+let _remindTimer = null;
+function ensureDailyReminders(u){
+  if(!u || u.role==='admin' || VIEWUSER) return;
+  if(u.status && u.status!=='approved') return;
+  if(!('Notification' in window)) return;
+  try{ localStorage.setItem('sl_reminders_on','1'); }catch(e){}
   if(Notification.permission==='default'){
-    // soft ask once per session via toast action isn't available — request on first dashboard
+    // Request once — browsers require a user gesture on some platforms; still try after login
+    try{
+      Notification.requestPermission().then(p=>{
+        if(p==='granted') startReminderClock();
+      });
+    }catch(e){}
+  } else if(Notification.permission==='granted'){
+    startReminderClock();
   }
-  if(Notification.permission==='granted'){
-    const h=new Date().getHours();
-    // gentle evening nudge if no check-in today
-    if(h>=18){
-      const ci=myCI();
-      if(!ci.some(c=>c.date===today())){
-        try{
-          new Notification('Shredlane',{body:'Don’t forget today’s check-in 💪',icon:undefined});
-          localStorage.setItem(key,'1');
-        }catch(e){}
-      }
+}
+function startReminderClock(){
+  if(_remindTimer) return;
+  // Check every 60s for scheduled reminder windows
+  _remindTimer = setInterval(tickDailyReminders, 60000);
+  tickDailyReminders();
+}
+function tickDailyReminders(){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  if(!CU || CU.role==='admin') return;
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const ci = typeof myCI==='function' ? myCI() : [];
+  const todayRow = (ci||[]).find(c=>c && c.date===today());
+  // Morning window 6:30–7:00 — weight & waist
+  if(h===6 && m>=30 && m<=59){
+    const key='sl_rem_am_'+today();
+    if(localStorage.getItem(key)) return;
+    const missingWt = !todayRow || todayRow.weight==null || todayRow.weight==='';
+    const missingWa = !todayRow || todayRow.waist==null || todayRow.waist==='';
+    if(missingWt || missingWa){
+      try{
+        new Notification('Shredlane', { body: 'Good morning — log weight and waist for today.', tag: 'sl-am' });
+        localStorage.setItem(key,'1');
+      }catch(e){}
+    } else {
+      localStorage.setItem(key,'1');
+    }
+  }
+  // Evening window 21:00–21:30 — water, steps, sleep if missing
+  if(h===21 && m>=0 && m<=30){
+    const key='sl_rem_pm_'+today();
+    if(localStorage.getItem(key)) return;
+    const missSteps = !todayRow || !(todayRow.steps>0);
+    const missWater = !todayRow || !(typeof waterToMl==='function' ? waterToMl(todayRow.water||0)>0 : todayRow.water);
+    const missSleep = !todayRow || todayRow.sleep==null || todayRow.sleep==='';
+    if(missSteps || missWater || missSleep || !todayRow){
+      try{
+        new Notification('Shredlane', { body: 'Evening check-in — log steps, water, and sleep before bed.', tag: 'sl-pm' });
+        localStorage.setItem(key,'1');
+      }catch(e){}
+    } else {
+      localStorage.setItem(key,'1');
     }
   }
 }
+function setupReminders(){
+  ensureDailyReminders(CU);
+}
 function enableReminders(){
   if(!('Notification' in window)){toast('Notifications not supported on this device','a');return;}
-  Notification.requestPermission().then(p=>{
-    if(p==='granted'){toast('🔔 Reminders enabled','g');setupReminders();}
-    else toast('Notifications blocked — enable in browser settings','a');
-  });
+  const after = (p)=>{
+    if(p==='granted'){
+      try{ localStorage.setItem('sl_reminders_on','1'); }catch(e){}
+      startReminderClock();
+      toast('Daily reminders on (6:30am & 9:00pm)','g');
+    } else if(p==='denied'){
+      toast('Notifications blocked — allow them in browser/site settings, then tap check again','a');
+    } else {
+      toast('Please allow notifications when the browser asks','a');
+    }
+    try{ renderRemindPrompt(CU); }catch(e){}
+    try{ renderDash(); }catch(e){}
+  };
+  try{
+    const req = Notification.requestPermission();
+    if(req && typeof req.then==='function') req.then(after);
+    else after(Notification.permission);
+  }catch(e){
+    after(Notification.permission);
+  }
 }
 
 // WhatsApp coach link
@@ -5083,19 +5124,26 @@ function buildWeeklyClientMessage(email){
     parts.push('');
   }
 
+  function metLine(logged, met, label){
+    const logBit = logged+' of 7 logged';
+    const metBit = met+' of 7 hit target';
+    const status = met>=5 ? 'on target' : (met===0 ? 'target not met' : 'below target');
+    return label+': '+logBit+' · '+metBit+' · *'+status+'*';
+  }
   parts.push('*THIS WEEK*');
-  parts.push('Weighed in: '+c.daysWeighed+' of 7 days');
-  parts.push('Waist: '+c.daysWaist+' of 7 days');
-  parts.push('Steps: '+c.daysStepsLogged+' of 7 days'+(c.daysStepsMet? ' ('+c.daysStepsMet+' at target)' : ''));
-  parts.push('Water: '+c.daysWaterLogged+' of 7 days'+(c.daysWaterMet? ' ('+c.daysWaterMet+' at target)' : ''));
-  parts.push('Sleep: '+c.daysSleep+' of 7 days');
-  parts.push('Training: *'+c.workouts+' of '+c.prescribed+' sessions*');
+  parts.push('Weighed in: '+c.daysWeighed+' of 7 days · *'+(c.daysWeighed>=5?'on track':'needs more days')+'*');
+  parts.push('Waist: '+c.daysWaist+' of 7 days · *'+(c.daysWaist>=5?'on track':'needs more days')+'*');
+  parts.push(metLine(c.daysStepsLogged, c.daysStepsMet, 'Steps'));
+  parts.push(metLine(c.daysWaterLogged, c.daysWaterMet, 'Water'));
+  parts.push(metLine(c.daysSleep, (c.daysSleepMet!=null?c.daysSleepMet:c.daysSleep), 'Sleep'));
+  const trainStatus = c.trainingPct>=85 ? 'on target' : (c.trainingPct===0 ? 'target not met' : 'below target');
+  parts.push('Training: *'+c.workouts+' of '+c.prescribed+' sessions* · *'+trainStatus+'*');
   parts.push('');
 
   if(pro!=null || food!=null){
     parts.push('*MYNETDIARY*');
-    if(pro!=null) parts.push('Protein: '+pro+' of 7 days');
-    if(food!=null) parts.push('Food log: '+food+' of 7 days');
+    if(pro!=null) parts.push('Protein: '+pro+' of 7 days · *'+(pro>=5?'on target':(pro===0?'target not met':'below target'))+'*');
+    if(food!=null) parts.push('Food log: '+food+' of 7 days · *'+(food>=5?'on target':(food===0?'target not met':'below target'))+'*');
     parts.push('');
   }
 
