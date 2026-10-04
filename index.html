@@ -3885,7 +3885,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
         <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
-        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills last-7-day counts. You add MyNetDiary + guarantee, then send on WhatsApp.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills last-7-day counts. You add MyNetDiary + guarantee. Optional note becomes FOCUS NEXT WEEK. WhatsApp bold uses *stars*.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
             <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
@@ -4692,13 +4692,13 @@ function buildWeeklyClientMessage(email){
   const priorWas = priorCI.map(x=>x.waist).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
   const priorWtAvg = priorWts.length ? priorWts.reduce((s,v)=>s+v,0)/priorWts.length : null;
   const priorWaAvg = priorWas.length ? priorWas.reduce((s,v)=>s+v,0)/priorWas.length : null;
-  function deltaPhrase(curr, prev, unit){
+  function deltaLine(curr, prev, unit){
     if(curr==null || prev==null) return null;
     const dlt = curr - prev;
-    if(Math.abs(dlt) < 0.05) return 'about the same as last week';
+    if(Math.abs(dlt) < 0.05) return 'About the same as last week';
     const abs = Math.abs(dlt).toFixed(1);
-    if(dlt < 0) return abs+' '+unit+' lower than last week';
-    return abs+' '+unit+' higher than last week';
+    if(dlt < 0) return '*'+abs+' '+unit+' lower than last week*';
+    return '*'+abs+' '+unit+' higher than last week*';
   }
   const id = _weeklyMsgDomId(email);
   const proEl = document.getElementById('wkPro-'+id);
@@ -4714,54 +4714,53 @@ function buildWeeklyClientMessage(email){
   let parts = [];
   parts.push('Hi '+first+',');
   parts.push('');
-  parts.push('Quick weekly check in from me on your last 7 days.');
+  parts.push('Quick note on your week.');
   parts.push('');
 
   if(c.weightAvg!=null){
-    let s = 'Your average weight was '+c.weightAvg.toFixed(1)+' kg';
-    const dp = deltaPhrase(c.weightAvg, priorWtAvg, 'kg');
-    if(dp) s += ', '+dp;
-    parts.push(s+'.');
+    parts.push('*WEIGHT*');
+    parts.push(c.weightAvg.toFixed(1)+' kg');
+    const dl = deltaLine(c.weightAvg, priorWtAvg, 'kg');
+    if(dl) parts.push(dl);
+    parts.push('');
   }
   if(c.waistAvg!=null){
-    let s = 'Your average waist was '+c.waistAvg.toFixed(1)+' inches';
-    const dp = deltaPhrase(c.waistAvg, priorWaAvg, 'inches');
-    if(dp) s += ', '+dp;
-    parts.push(s+'.');
+    parts.push('*WAIST*');
+    parts.push(c.waistAvg.toFixed(1)+' in');
+    const dl = deltaLine(c.waistAvg, priorWaAvg, 'in');
+    if(dl) parts.push(dl);
+    parts.push('');
   }
-  if(c.weightAvg!=null || c.waistAvg!=null) parts.push('');
 
-  parts.push('You weighed in on '+c.daysWeighed+' of the last 7 days and logged waist on '+c.daysWaist+'.');
-  parts.push('Steps showed up on '+c.daysStepsLogged+' days'+(c.daysStepsMet? ', and you hit your step target on '+c.daysStepsMet+' of those' : '')+'.');
-  parts.push('Water was logged on '+c.daysWaterLogged+' days'+(c.daysWaterMet? ', with '+c.daysWaterMet+' days at target' : '')+'.');
-  parts.push('Sleep was logged on '+c.daysSleep+' days.');
+  parts.push('*THIS WEEK*');
+  parts.push('Weighed in: '+c.daysWeighed+' of 7 days');
+  parts.push('Waist: '+c.daysWaist+' of 7 days');
+  parts.push('Steps: '+c.daysStepsLogged+' of 7 days'+(c.daysStepsMet? ' ('+c.daysStepsMet+' at target)' : ''));
+  parts.push('Water: '+c.daysWaterLogged+' of 7 days'+(c.daysWaterMet? ' ('+c.daysWaterMet+' at target)' : ''));
+  parts.push('Sleep: '+c.daysSleep+' of 7 days');
+  parts.push('Training: *'+c.workouts+' of '+c.prescribed+' sessions*');
   parts.push('');
-  parts.push('Training came in at '+c.trainingPct+' percent. That is '+c.workouts+' of '+c.prescribed+' planned sessions.');
 
   if(pro!=null || food!=null){
+    parts.push('*MYNETDIARY*');
+    if(pro!=null) parts.push('Protein: '+pro+' of 7 days');
+    if(food!=null) parts.push('Food log: '+food+' of 7 days');
     parts.push('');
-    if(pro!=null && food!=null){
-      parts.push('On MyNetDiary, protein was on target '+pro+' of 7 days and food was logged '+food+' of 7 days.');
-    } else if(pro!=null){
-      parts.push('On MyNetDiary, protein was on target '+pro+' of 7 days.');
-    } else {
-      parts.push('On MyNetDiary, food was logged '+food+' of 7 days.');
-    }
   }
 
   if(guar){
+    parts.push('*GUARANTEE*');
+    parts.push('*'+guar+'*');
     parts.push('');
-    parts.push('Your guarantee status this week is '+guar+'.');
   }
 
   if(note){
-    parts.push('');
+    parts.push('*FOCUS NEXT WEEK*');
     parts.push(note);
+    parts.push('');
   }
 
-  parts.push('');
-  parts.push('Reply anytime if you want help adjusting something. Proud of the work you are putting in.');
-  parts.push('');
+  parts.push('Proud of you. Reply if you need me.');
   parts.push('Coach');
   return parts.join('\n');
 }
