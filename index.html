@@ -3883,6 +3883,32 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         </div>
         <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
       </div>`:''}
+      ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
+        <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills last-7-day counts. You add MyNetDiary + guarantee, then send on WhatsApp.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
+          <div><div class="fl" style="font-size:10px">Food log days (0–7)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
+          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Guarantee status</div>
+            <select class="fi" style="font-size:12px;padding:8px" id="wkGuar-${id}">
+              <option value="Active">Active (≥85%, no red flag)</option>
+              <option value="Paused">Paused (below 85%)</option>
+              <option value="VOID — Reset needed">VOID — Reset needed</option>
+              <option value="On track">On track</option>
+              <option value="">— skip —</option>
+            </select></div>
+          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Extra note (optional)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="e.g. Great consistency on water this week"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="approve-btn" style="padding:8px 12px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="previewWeeklyClientMessage('${u.email}')">👁 Preview</button>
+          <button class="approve-btn" style="padding:8px 12px;font-size:11px;background:var(--grn);color:#000;border:none" onclick="sendWeeklyClientMessage('${u.email}')">📲 Send WhatsApp</button>
+          <button class="approve-btn" style="padding:8px 12px;font-size:11px" onclick="copyWeeklyClientMessage('${u.email}')">📋 Copy only</button>
+        </div>
+        <pre id="wkPreview-${id}" style="display:none;margin:10px 0 0;padding:10px;background:#000;border-radius:8px;font-size:11px;color:var(--txt);white-space:pre-wrap;font-family:Barlow,sans-serif;line-height:1.45"></pre>
+      </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
@@ -4645,6 +4671,87 @@ function openWhatsAppTo(phone, body){
   const w = window.open(url, '_blank');
   return !!w;
 }
+
+function _weeklyMsgDomId(email){
+  return String(email||'').replace(/[^a-zA-Z0-9]/g,'_');
+}
+function buildWeeklyClientMessage(email){
+  email = String(email||'').trim().toLowerCase();
+  const d = gDB();
+  const u = d.users[email] || Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email) || {};
+  const ci = Array.isArray(d.checkins[email]) ? d.checkins[email] : (Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[]);
+  const wkts = Array.isArray(d.workouts[email]) ? d.workouts[email] : (Array.isArray(d.workouts[u.email])?d.workouts[u.email]:[]);
+  const c = weekLogCounts(u, ci, wkts);
+  const id = _weeklyMsgDomId(email);
+  const proEl = document.getElementById('wkPro-'+id);
+  const foodEl = document.getElementById('wkFood-'+id);
+  const guarEl = document.getElementById('wkGuar-'+id);
+  const noteEl = document.getElementById('wkNote-'+id);
+  const pro = proEl && proEl.value !== '' ? proEl.value : null;
+  const food = foodEl && foodEl.value !== '' ? foodEl.value : null;
+  const guar = guarEl ? (guarEl.value||'') : '';
+  const note = noteEl ? (noteEl.value||'').trim() : '';
+  const first = (u.name||'there').split(' ')[0];
+  const wtLine = c.weightAvg!=null ? (' · avg '+c.weightAvg.toFixed(1)+' kg') : '';
+  const waLine = c.waistAvg!=null ? (' · avg '+c.waistAvg.toFixed(1)+' in') : '';
+  let lines = [];
+  lines.push('Hi '+first+',');
+  lines.push('');
+  lines.push('Your Shredlane week (last 7 days):');
+  lines.push('• Weight logged: '+c.daysWeighed+'/7'+wtLine);
+  lines.push('• Waist logged: '+c.daysWaist+'/7'+waLine);
+  lines.push('• Steps logged: '+c.daysStepsLogged+'/7 ('+c.daysStepsMet+' hit target)');
+  lines.push('• Water logged: '+c.daysWaterLogged+'/7 ('+c.daysWaterMet+' hit target)');
+  lines.push('• Sleep logged: '+c.daysSleep+'/7');
+  lines.push('• Training: '+c.trainingPct+'% ('+c.workouts+' / '+c.prescribed+' sessions)');
+  if(pro!=null || food!=null){
+    lines.push('');
+    lines.push('Nutrition (MyNetDiary):');
+    if(pro!=null) lines.push('• Protein target days: '+pro+'/7');
+    if(food!=null) lines.push('• Food log days: '+food+'/7');
+  }
+  if(guar){
+    lines.push('');
+    lines.push('Guarantee status: '+guar);
+  }
+  if(note){
+    lines.push('');
+    lines.push(note);
+  }
+  lines.push('');
+  lines.push('Keep going — reply here if you need anything.');
+  lines.push('— Shredlane');
+  return lines.join('\n');
+}
+function previewWeeklyClientMessage(email){
+  const id = _weeklyMsgDomId(email);
+  const pre = document.getElementById('wkPreview-'+id);
+  if(!pre){ toast('Open the client row first','a'); return; }
+  pre.style.display = 'block';
+  pre.textContent = buildWeeklyClientMessage(email);
+  toast('Preview ready — edit fields and preview again if needed','g');
+}
+function copyWeeklyClientMessage(email){
+  const body = buildWeeklyClientMessage(email);
+  try{ navigator.clipboard.writeText(body); toast('Weekly message copied','g'); }
+  catch(e){ toast('Could not copy — use Preview and select text','a'); }
+  const id = _weeklyMsgDomId(email);
+  const pre = document.getElementById('wkPreview-'+id);
+  if(pre){ pre.style.display='block'; pre.textContent=body; }
+}
+function sendWeeklyClientMessage(email){
+  email = String(email||'').trim().toLowerCase();
+  const body = buildWeeklyClientMessage(email);
+  const d = gDB();
+  const u = d.users[email] || Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email) || {};
+  const id = _weeklyMsgDomId(email);
+  const pre = document.getElementById('wkPreview-'+id);
+  if(pre){ pre.style.display='block'; pre.textContent=body; }
+  const ok = openWhatsAppTo(u.phone, body);
+  if(!ok) toast('Message copied — allow pop-ups or paste into WhatsApp','a');
+  else toast(u.phone ? 'WhatsApp opened with weekly update' : 'WhatsApp opened — pick the client (no phone on file)','g');
+}
+
 function remindClient(firstName, evt, email){
   if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
   const name = (firstName||'there').trim() || 'there';
