@@ -3893,9 +3893,9 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
           <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Guarantee status</div>
             <select class="fi" style="font-size:12px;padding:8px" id="wkGuar-${id}">
-              <option value="Active">Active (≥85%, no red flag)</option>
-              <option value="Paused">Paused (below 85%)</option>
-              <option value="VOID — Reset needed">VOID — Reset needed</option>
+              <option value="Active">Active</option>
+              <option value="Paused">Paused</option>
+              <option value="VOID, reset needed">VOID, reset needed</option>
               <option value="On track">On track</option>
               <option value="">— skip —</option>
             </select></div>
@@ -4682,6 +4682,24 @@ function buildWeeklyClientMessage(email){
   const ci = Array.isArray(d.checkins[email]) ? d.checkins[email] : (Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[]);
   const wkts = Array.isArray(d.workouts[email]) ? d.workouts[email] : (Array.isArray(d.workouts[u.email])?d.workouts[u.email]:[]);
   const c = weekLogCounts(u, ci, wkts);
+  const thisStart = weekWindowStart();
+  const priorEnd = new Date(thisStart+'T00:00:00'); priorEnd.setDate(priorEnd.getDate()-1);
+  const priorStart = new Date(priorEnd); priorStart.setDate(priorStart.getDate()-6);
+  const pStart = priorStart.toISOString().slice(0,10);
+  const pEnd = priorEnd.toISOString().slice(0,10);
+  const priorCI = (ci||[]).filter(x=>x && x.date>=pStart && x.date<=pEnd);
+  const priorWts = priorCI.map(x=>x.weight).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
+  const priorWas = priorCI.map(x=>x.waist).filter(v=>v!=null && v!=='' && !isNaN(Number(v))).map(Number);
+  const priorWtAvg = priorWts.length ? priorWts.reduce((s,v)=>s+v,0)/priorWts.length : null;
+  const priorWaAvg = priorWas.length ? priorWas.reduce((s,v)=>s+v,0)/priorWas.length : null;
+  function deltaPhrase(curr, prev, unit){
+    if(curr==null || prev==null) return null;
+    const dlt = curr - prev;
+    if(Math.abs(dlt) < 0.05) return 'about the same as last week';
+    const abs = Math.abs(dlt).toFixed(1);
+    if(dlt < 0) return abs+' '+unit+' lower than last week';
+    return abs+' '+unit+' higher than last week';
+  }
   const id = _weeklyMsgDomId(email);
   const proEl = document.getElementById('wkPro-'+id);
   const foodEl = document.getElementById('wkFood-'+id);
@@ -4692,36 +4710,60 @@ function buildWeeklyClientMessage(email){
   const guar = guarEl ? (guarEl.value||'') : '';
   const note = noteEl ? (noteEl.value||'').trim() : '';
   const first = (u.name||'there').split(' ')[0];
-  const wtLine = c.weightAvg!=null ? (' · avg '+c.weightAvg.toFixed(1)+' kg') : '';
-  const waLine = c.waistAvg!=null ? (' · avg '+c.waistAvg.toFixed(1)+' in') : '';
-  let lines = [];
-  lines.push('Hi '+first+',');
-  lines.push('');
-  lines.push('Your Shredlane week (last 7 days):');
-  lines.push('• Weight logged: '+c.daysWeighed+'/7'+wtLine);
-  lines.push('• Waist logged: '+c.daysWaist+'/7'+waLine);
-  lines.push('• Steps logged: '+c.daysStepsLogged+'/7 ('+c.daysStepsMet+' hit target)');
-  lines.push('• Water logged: '+c.daysWaterLogged+'/7 ('+c.daysWaterMet+' hit target)');
-  lines.push('• Sleep logged: '+c.daysSleep+'/7');
-  lines.push('• Training: '+c.trainingPct+'% ('+c.workouts+' / '+c.prescribed+' sessions)');
+
+  let parts = [];
+  parts.push('Hi '+first+',');
+  parts.push('');
+  parts.push('Quick weekly check in from me on your last 7 days.');
+  parts.push('');
+
+  if(c.weightAvg!=null){
+    let s = 'Your average weight was '+c.weightAvg.toFixed(1)+' kg';
+    const dp = deltaPhrase(c.weightAvg, priorWtAvg, 'kg');
+    if(dp) s += ', '+dp;
+    parts.push(s+'.');
+  }
+  if(c.waistAvg!=null){
+    let s = 'Your average waist was '+c.waistAvg.toFixed(1)+' inches';
+    const dp = deltaPhrase(c.waistAvg, priorWaAvg, 'inches');
+    if(dp) s += ', '+dp;
+    parts.push(s+'.');
+  }
+  if(c.weightAvg!=null || c.waistAvg!=null) parts.push('');
+
+  parts.push('You weighed in on '+c.daysWeighed+' of the last 7 days and logged waist on '+c.daysWaist+'.');
+  parts.push('Steps showed up on '+c.daysStepsLogged+' days'+(c.daysStepsMet? ', and you hit your step target on '+c.daysStepsMet+' of those' : '')+'.');
+  parts.push('Water was logged on '+c.daysWaterLogged+' days'+(c.daysWaterMet? ', with '+c.daysWaterMet+' days at target' : '')+'.');
+  parts.push('Sleep was logged on '+c.daysSleep+' days.');
+  parts.push('');
+  parts.push('Training came in at '+c.trainingPct+' percent. That is '+c.workouts+' of '+c.prescribed+' planned sessions.');
+
   if(pro!=null || food!=null){
-    lines.push('');
-    lines.push('Nutrition (MyNetDiary):');
-    if(pro!=null) lines.push('• Protein target days: '+pro+'/7');
-    if(food!=null) lines.push('• Food log days: '+food+'/7');
+    parts.push('');
+    if(pro!=null && food!=null){
+      parts.push('On MyNetDiary, protein was on target '+pro+' of 7 days and food was logged '+food+' of 7 days.');
+    } else if(pro!=null){
+      parts.push('On MyNetDiary, protein was on target '+pro+' of 7 days.');
+    } else {
+      parts.push('On MyNetDiary, food was logged '+food+' of 7 days.');
+    }
   }
+
   if(guar){
-    lines.push('');
-    lines.push('Guarantee status: '+guar);
+    parts.push('');
+    parts.push('Your guarantee status this week is '+guar+'.');
   }
+
   if(note){
-    lines.push('');
-    lines.push(note);
+    parts.push('');
+    parts.push(note);
   }
-  lines.push('');
-  lines.push('Keep going — reply here if you need anything.');
-  lines.push('— Shredlane');
-  return lines.join('\n');
+
+  parts.push('');
+  parts.push('Reply anytime if you want help adjusting something. Proud of the work you are putting in.');
+  parts.push('');
+  parts.push('Coach');
+  return parts.join('\n');
 }
 function previewWeeklyClientMessage(email){
   const id = _weeklyMsgDomId(email);
