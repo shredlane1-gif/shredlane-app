@@ -2305,25 +2305,20 @@ function renderAdminRiskAndBulk(){
     const nlOpen = isAdminSectionOpen('notLogged', true);
     const naOpen = isAdminSectionOpen('needsAtt', true); // always show by default (not night-only)
     let html = '';
-    // Daily reminder list — only clients with NO check-in today
+    // Info-only lists (no manual Remind / nudge actions — use Weekly update message)
     html += `<div class="risk-panel" style="border-color:rgba(255,184,0,.4);margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('notLogged')">
-        <h4 style="color:var(--amb);margin:0">Remind: not checked in today (${notToday.length})</h4>
+        <h4 style="color:var(--amb);margin:0">Not checked in today (${notToday.length})</h4>
         <span id="notLoggedChev" style="color:var(--grn);font-weight:800">${nlOpen?'▾':'›'}</span>
       </div>
       <div id="notLoggedBody" style="display:${nlOpen?'block':'none'};margin-top:8px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-          <div style="font-size:11px;color:var(--gry)">Only clients with no check-in today</div>
-          ${notToday.length?`<button class="approve-btn" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();remindAllNotLogged()">Remind all (${notToday.length})</button>`:''}
-        </div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">For your awareness. Send feedback with Weekly update message, not daily pings.</div>
         ${notToday.length? notToday.map(u=>`
           <div class="risk-item"><strong>${escHtml(u.name)}</strong>
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();remindClient('${(u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${u.email}');">Remind</button>
           </div>`).join('') : '<div class="risk-item">Everyone has checked in today ✅</div>'}
       </div>
     </div>`;
-    // Photo miss this week (since Sunday)
     const phOpen = isAdminSectionOpen('photoMiss', false);
     html += `<div class="risk-panel" style="border-color:rgba(255,214,0,.35);margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('photoMiss')">
@@ -2331,50 +2326,35 @@ function renderAdminRiskAndBulk(){
         <span id="photoMissChev" style="color:var(--grn);font-weight:800">${phOpen?'▾':'›'}</span>
       </div>
       <div id="photoMissBody" style="display:${phOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No progress photo set since ${sun}.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No progress photo since ${sun}.</div>
         ${photoMiss.length? photoMiss.slice(0,15).map(u=>`
           <div class="risk-item"><strong>${escHtml(u.name)}</strong>
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="event.stopPropagation();viewMemberPhotos('${u.email}')">Photos</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${u.email}')">Msg</button>
-          </div>`).join('') : '<div class="risk-item">All approved clients have a photo set this week ✅</div>'}
+          </div>`).join('') : '<div class="risk-item">All approved clients have a photo this week ✅</div>'}
       </div>
     </div>`;
-    // Longer-term risks
     html += `<div class="risk-panel" style="border-color:${risks.length?'rgba(255,59,48,.35)':'rgba(255,214,0,.3)'};margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('needsAtt')">
         <h4 style="color:${risks.length?'var(--red)':'var(--grn)'};margin:0">Needs attention (${risks.length})</h4>
         <span id="needsAttChev" style="color:var(--grn);font-weight:800">${naOpen?'▾':'›'}</span>
       </div>
       <div id="needsAttBody" style="display:${naOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">Anytime — not only at night. Shows clients with no check-in for 2+ days, low adherence, or weight up ~1.5kg.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No check-in 2+ days, low adherence, or weight up ~1.5kg. Open Weekly update to message them.</div>
         ${risks.length? risks.slice(0,12).map(r=>`
           <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
             <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
-            <button class="approve-btn" style="padding:4px 8px;font-size:10px" onclick="event.stopPropagation();messageClientCheckIn('${(r.u.name||'').split(' ')[0].replace(/'/g,'')}',event,'${r.u.email}');">Msg</button>
           </div>`).join('') : '<div class="risk-item">All clear right now.</div>'}
       </div>
     </div>`;
     panel.innerHTML = html;
   }
   if(bulk){
-    const bOpen = isAdminSectionOpen('bulkMsg', false);
-    bulk.style.display='block';
-    bulk.innerHTML = `<div class="card" style="margin:0;padding:12px 14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('bulkMsg')">
-        <div class="card-lbl" style="margin:0">Bulk message</div>
-        <span id="bulkMsgChev" style="color:var(--grn);font-weight:800">${bOpen?'▾':'›'}</span>
-      </div>
-      <div id="bulkMsgBody" style="display:${bOpen?'block':'none'};margin-top:10px">
-        <textarea class="fi" id="bulkMsgText" style="min-height:60px" placeholder="Message to clients">Quick reminder from Shredlane — log today's check-in when you can.</textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-          <button class="approve-btn" onclick="bulkMessageClients()">Copy & open WhatsApp</button>
-        </div>
-        <div style="font-size:11px;color:var(--gry);margin-top:6px">Optional. For daily nudges, use <strong>Remind</strong> on the list above instead.</div>
-      </div>
-    </div>`;
+    bulk.style.display='none';
+    bulk.innerHTML = '';
   }
 }
 function bulkMessageClients(){
+
   const text = (document.getElementById('bulkMsgText')||{}).value || 'Reminder from Shredlane';
   const approved = Object.values(gDB().users||{}).filter(u=>u.role!=='admin'&&u.status==='approved');
   if(!approved.length){ toast('No approved clients','a'); return; }
@@ -2386,13 +2366,7 @@ function bulkMessageClients(){
   window.open('https://wa.me/?text='+msg, '_blank');
   toast('Message copied — WhatsApp opened. Paste/send to your client list.','g');
 }
-function coachBackupReminder(force){
-  if(!CU || CU.role!=='admin') return;
-  const key = 'sl_backup_tip_' + today().slice(0,7); // once a month
-  if(!force && localStorage.getItem(key)) return;
-  localStorage.setItem(key,'1');
-  toast('☁️ Backup tip: your client data lives in Firebase. Export CSV/PDF for any client from Admin anytime.','a');
-}
+function coachBackupReminder(force){ /* disabled — no manual tips */ }
 function exportUserWeekPDF(email){
   // Prefer existing exportUserPDF if present
   if(typeof exportUserPDF === 'function'){
@@ -4301,14 +4275,14 @@ const approveUser = requireAdmin(async function approveUser(email){
     await fdb.collection('users').doc(docId).set({
       status: 'approved',
       email: email,
-      nudgeReminders: true,
+      
       approvedAt: Date.now()
     }, {merge:true});
 
     if(!CACHE.users[docId]) CACHE.users[docId] = Object.assign({}, prev||{}, {email:email});
     CACHE.users[docId].status = 'approved';
     CACHE.users[docId].email = email;
-    CACHE.users[docId].nudgeReminders = true;
+    
 
     // If a duplicate pending doc exists under another id, approve that too
     try{
@@ -5076,6 +5050,28 @@ function buildWeeklyClientMessage(email){
   const note = noteEl ? (noteEl.value||'').trim() : '';
   const first = (u.name||'there').split(' ')[0];
 
+  // Photos: adherence every 14 days (at least one upload in the window)
+  const emailKey = String(u.email||email).toLowerCase();
+  const photoRaw = (d.photos && (d.photos[emailKey]||d.photos[email]||d.photos[u.email])) || (CACHE.photos && (CACHE.photos[emailKey]||CACHE.photos[email])) || [];
+  const photoList = (Array.isArray(photoRaw)?photoRaw:(photoRaw.entries||[])).filter(e=>e&&e.date);
+  const start14 = new Date(); start14.setDate(start14.getDate()-13);
+  const start14s = start14.toISOString().slice(0,10);
+  const start28 = new Date(); start28.setDate(start28.getDate()-27);
+  const start28s = start28.toISOString().slice(0,10);
+  const endPrev = new Date(); endPrev.setDate(endPrev.getDate()-14);
+  const endPrevs = endPrev.toISOString().slice(0,10);
+  const photosThis14 = photoList.filter(e=>e.date>=start14s).length;
+  const photosPrev14 = photoList.filter(e=>e.date>=start28s && e.date<=endPrevs).length;
+  const lastPhoto = photoList.reduce((a,b)=>!a||b.date>a?b.date:a, null);
+  const photoGap = lastPhoto ? daysSinceDate(lastPhoto) : 999;
+  // 100% if at least 1 photo in last 14 days; else 0
+  const photoPct = photosThis14>=1 ? 100 : 0;
+  let photoTrend = 'no prior window';
+  if(photosThis14>=1 && photosPrev14>=1) photoTrend = 'steady vs prior 2 weeks';
+  else if(photosThis14>=1 && photosPrev14===0) photoTrend = 'improved vs prior 2 weeks';
+  else if(photosThis14===0 && photosPrev14>=1) photoTrend = 'regressed vs prior 2 weeks';
+  else if(photosThis14===0 && photosPrev14===0) photoTrend = 'missed both 2-week windows';
+
   // Score each habit 0–100 for last 7 days (target-met where it matters)
   const scores = [
     {key:'weight', label:'Weigh-ins', pct: Math.round((c.daysWeighed/7)*100), tip:'Weigh in every morning, same conditions'},
@@ -5084,6 +5080,7 @@ function buildWeeklyClientMessage(email){
     {key:'water', label:'Water at target', pct: Math.round((c.daysWaterMet/7)*100), tip:'Hit your water target at least 5 days'},
     {key:'sleep', label:'Sleep logging', pct: Math.round((c.daysSleep/7)*100), tip:'Log sleep every day so we can see the pattern'},
     {key:'training', label:'Training', pct: c.trainingPct, tip:'Complete your planned training sessions'},
+    {key:'photos', label:'Progress photos (14d)', pct: photoPct, tip:'Upload progress photos at least once every 2 weeks'},
   ];
   if(pro!=null && !isNaN(pro)) scores.push({key:'protein', label:'Protein target', pct: Math.round((pro/7)*100), tip:'Hit protein on more days in MyNetDiary'});
   if(food!=null && !isNaN(food)) scores.push({key:'food', label:'Food logging', pct: Math.round((food/7)*100), tip:'Log food every day in MyNetDiary'});
@@ -5138,6 +5135,9 @@ function buildWeeklyClientMessage(email){
   parts.push(metLine(c.daysSleep, (c.daysSleepMet!=null?c.daysSleepMet:c.daysSleep), 'Sleep'));
   const trainStatus = c.trainingPct>=85 ? 'on target' : (c.trainingPct===0 ? 'target not met' : 'below target');
   parts.push('Training: *'+c.workouts+' of '+c.prescribed+' sessions* · *'+trainStatus+'*');
+  const photoStatus = photoPct>=85 ? 'on target' : 'target not met';
+  parts.push('Photos (14 days): '+(photosThis14>=1 ? (photosThis14+' upload'+(photosThis14===1?'':'s')) : 'none')+' · last '+(lastPhoto||'never')+(photoGap<999?' ('+photoGap+'d ago)':'')+' · *'+photoStatus+'*');
+  parts.push('Photo trend: *'+photoTrend+'*');
   parts.push('');
 
   if(pro!=null || food!=null){
@@ -5222,39 +5222,14 @@ function sendWeeklyClientMessage(email){
 
 function remindClient(firstName, evt, email){
   if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
-  const name = (firstName||'there').trim() || 'there';
-  const body = 'Hi '+name+', quick reminder from Shredlane — please log today\'s check-in when you can. You\'ve got this.';
-  const u = email ? (gDB().users[email]||{}) : {};
-  const ok = openWhatsAppTo(u.phone, body);
-  if(!ok) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
-  else toast(u.phone ? ('WhatsApp opened for '+name) : ('WhatsApp opened — pick '+name+' (no phone on file)'),'g');
+  toast('Use Weekly update message on the client instead of daily reminds','a');
 }
 function messageClientCheckIn(firstName, evt, email){
   if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
-  const name = (firstName||'there').trim() || 'there';
-  const body = 'Hi '+name+', checking in from Shredlane — how are you getting on?';
-  const u = email ? (gDB().users[email]||{}) : {};
-  const ok = openWhatsAppTo(u.phone, body);
-  if(!ok) toast('Allow pop-ups, or paste from clipboard in WhatsApp','a');
-  else toast('WhatsApp opened','g');
+  toast('Open the client and use Weekly update message','a');
 }
 function remindAllNotLogged(){
-  const d=gDB();
-  const tday=today();
-  const list = Object.values(d.users||{}).filter(u=>u.role!=='admin'&&u.status==='approved').filter(u=>{
-    const ci=Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
-    return !ci.some(c=>c&&c.date===tday);
-  });
-  if(!list.length){ toast('Everyone has checked in today','g'); return; }
-  const withPhone = list.find(u=>normalizePhone(u.phone));
-  if(withPhone){
-    openWhatsAppTo(withPhone.phone, 'Hi '+(withPhone.name||'').split(' ')[0]+', quick reminder from Shredlane — please log today\'s check-in when you can.');
-    toast(list.length+' still due — chat opened for first client with a phone','g');
-  } else {
-    const names = list.map(u=>(u.name||'').split(' ')[0]).filter(Boolean).slice(0,12).join(', ');
-    openWhatsAppTo('', 'Shredlane reminder — please log today\'s check-in. Still due: '+names);
-    toast(list.length+' still due — pick contacts in WhatsApp','a');
-  }
+  toast('Daily bulk reminds removed — use each client Weekly update message','a');
 }
 async function saveCoachTargets(email){
   if(!CU||CU.role!=='admin')return;
