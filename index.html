@@ -745,15 +745,18 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
       <!-- TREND CHART -->
       <div class="trend-card">
-        <div class="card-lbl">Progress Trend</div>
+        <div class="card-lbl">Progress Trend · all time</div>
         <div class="trend-tabs">
-          <button class="trend-tab active" onclick="setTrendMetric('weight',this)">Weight</button>
+          <button class="trend-tab active" onclick="setTrendMetric('body',this)">Weight + Waist</button>
+          <button class="trend-tab" onclick="setTrendMetric('weight',this)">Weight</button>
           <button class="trend-tab" onclick="setTrendMetric('waist',this)">Waist</button>
           <button class="trend-tab" onclick="setTrendMetric('steps',this)">Steps</button>
           <button class="trend-tab" onclick="setTrendMetric('sleep',this)">Sleep</button>
           <button class="trend-tab" onclick="setTrendMetric('water',this)">Water</button>
         </div>
         <div class="chart-area"><svg class="chart-svg" id="trendSVG" viewBox="0 0 300 140" preserveAspectRatio="none"></svg></div>
+        <div id="trendLegend" style="display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:11px;color:var(--gry)"></div>
+        <button class="b-secondary" style="width:auto;padding:8px 14px;font-size:12px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="shareBodyChartImage()">📈 Share chart image</button>
         <div class="card-lbl" style="margin-bottom:8px;margin-top:4px">Weekly Averages</div>
         <div class="week-avgs" id="weekAvgs"><div style="font-size:12px;color:var(--gry);padding:8px">Log check-ins to see weekly averages</div></div>
       </div>
@@ -854,9 +857,8 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="tl-sub" id="tlSub"></div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="exportMyPDF()">📄 Download Report Card (PDF)</button>
-      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="exportMyCSV()">⬇️ Export my data (CSV)</button>
       <button class="b-secondary" style="width:auto;padding:10px 16px;border-color:var(--grn);color:var(--grn)" onclick="shareProgressImage()">📲 Share progress image</button>
+      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="shareBodyChartImage()">📈 Share weight &amp; waist chart</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
@@ -1368,7 +1370,7 @@ function startDataListeners(){
 // ═══════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════
-let CU=null, trendMetric='weight';
+let CU=null, trendMetric='body';
 
 // ═══════════════════════════════════════
 // AUTH
@@ -2006,27 +2008,16 @@ function renderClientAlerts(u, ci){
     alert = {cls:'warn', html:`⏰ <strong>Missed check-in:</strong> last log was ${gap} days ago (${last}).`,
       actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Check in now</button>`};
   }
-  // Sunday photo mode: elevate photo prompt on Sundays (after missed check-in)
-  if(!alert){
+  // Sunday only: photo nudge (no mid-week photo nag)
+  if(!alert && new Date().getDay() === 0){
     const lastPhoto = lastPhotoDate(u.email);
     const photoGap = daysSinceDate(lastPhoto);
-    const isSunday = new Date().getDay() === 0;
-    const needPhoto = !lastPhoto || photoGap >= 14 || (isSunday && (!lastPhoto || photoGap >= 5));
-    if(needPhoto){
-      const dismissedP = localStorage.getItem('sl_photo_prompt_' + today());
-      if(!dismissedP){
-        if(isSunday){
-          alert = {cls:'info', html: '📷 <strong>Sunday photo day.</strong> Upload today’s progress photos for your coach.',
-            actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('tbPhotos'))">Upload photos</button>
-                     <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
-        } else if(!lastPhoto || photoGap >= 14){
-          alert = {cls:'info', html: !lastPhoto
-            ? '📷 <strong>Add progress photos</strong> (every Sunday).'
-            : `📷 <strong>Photo check-in:</strong> last photos were ${photoGap} days ago — Sundays are for uploads.`,
-            actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('tbPhotos'))">Open Photos</button>
-                     <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
-        }
-      }
+    const needPhoto = !lastPhoto || photoGap >= 5;
+    const dismissedP = localStorage.getItem('sl_photo_prompt_' + today());
+    if(needPhoto && !dismissedP){
+      alert = {cls:'info', html: '📷 <strong>Sunday photo day.</strong> Upload progress photos for your coach.',
+        actions:`<button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="goTab('photos',document.getElementById('photosTab'))">Upload photos</button>
+                 <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="localStorage.setItem('sl_photo_prompt_'+today(),'1');renderDash()">Later</button>`};
     }
   }
   if(!alert){
@@ -3005,6 +2996,58 @@ function myAssignedProgram(){
   return gDB().programs[u.programId]||null;
 }
 /** Returns 'loading' | 'missing' | program object */
+
+/** Next program day to train: after last logged session, or first day of plan */
+function nextProgramSession(u, wkts){
+  const st = typeof myAssignedProgramState==='function' ? myAssignedProgramState() : {state:'none'};
+  if(st.state!=='ready' || !st.prog || !Array.isArray(st.prog.days) || !st.prog.days.length) return null;
+  const days = st.prog.days;
+  const recent = (wkts||[]).slice().filter(w=>w&&w.date).sort((a,b)=>b.date.localeCompare(a.date));
+  let idx = 0;
+  if(recent.length){
+    const last = recent[0];
+    const byId = last.programDayId || last.dayId || null;
+    const byName = (last.title||last.name||'').toLowerCase();
+    let found = -1;
+    if(byId) found = days.findIndex(d=>d.id===byId);
+    if(found<0 && byName) found = days.findIndex(d=>(d.name||'').toLowerCase()===byName);
+    idx = found>=0 ? (found+1) % days.length : 0;
+  }
+  const day = days[idx];
+  return {prog: st.prog, day, index: idx, total: days.length};
+}
+function bodyWinLine(u, ci){
+  const sorted = (ci||[]).slice().filter(c=>c&&c.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(sorted.length<2) return null;
+  const last = sorted[sorted.length-1];
+  // Compare latest to ~14 days earlier (or earliest if shorter history)
+  const cut = new Date(); cut.setDate(cut.getDate()-14);
+  const cutStr = cut.toISOString().slice(0,10);
+  let older = null;
+  for(let i=sorted.length-1;i>=0;i--){
+    if(sorted[i].date <= cutStr){ older = sorted[i]; break; }
+  }
+  if(!older) older = sorted[0];
+  if(older.date === last.date) return null;
+  const bits = [];
+  if(last.weight!=null && older.weight!=null){
+    const d = Number(last.weight)-Number(older.weight);
+    if(Math.abs(d)>=0.1){
+      bits.push(d<0 ? ('Weight down '+Math.abs(d).toFixed(1)+' kg vs 2 weeks ago') : ('Weight up '+Math.abs(d).toFixed(1)+' kg vs 2 weeks ago'));
+    }
+  }
+  if(last.waist!=null && older.waist!=null){
+    const d = Number(last.waist)-Number(older.waist);
+    if(Math.abs(d)>=0.1){
+      bits.push(d<0 ? ('Waist down '+Math.abs(d).toFixed(1)+' in vs 2 weeks ago') : ('Waist up '+Math.abs(d).toFixed(1)+' in vs 2 weeks ago'));
+    }
+  }
+  if(!bits.length) return null;
+  // Prefer a positive-leaning single line: waist first if down, else weight if down, else first bit
+  const good = bits.find(b=>b.indexOf('down')>=0);
+  return good || bits[0];
+}
+
 function myAssignedProgramState(){
   const u=VIEWUSER||CU;
   if(!u||!u.programId)return {state:'none',prog:null};
@@ -3272,16 +3315,96 @@ function setTrendMetric(m,btn){
 }
 
 function renderTrend(){
-  const ci=myCI();
+  const ci=myCI().slice().sort((a,b)=>a.date.localeCompare(b.date));
   const svg=document.getElementById('trendSVG');
   const wkEl=document.getElementById('weekAvgs');
+  const legend=document.getElementById('trendLegend');
   if(!svg)return;
+  if(legend) legend.innerHTML='';
   if(ci.length<2){
     svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">Log at least 2 check-ins to see your trend</text>';
-    wkEl.innerHTML='<div style="font-size:12px;color:var(--gry);padding:8px">Log check-ins to see weekly averages</div>';
+    if(wkEl) wkEl.innerHTML='<div style="font-size:12px;color:var(--gry);padding:8px">Log check-ins to see weekly averages</div>';
     return;
   }
-  // Get values and dates
+  const W=300,H=130,pad=12;
+
+  // Dual all-time body chart (weight + waist), each scaled 0–1 so both fit
+  if(trendMetric==='body'){
+    const pts = ci.map(c=>({
+      date:c.date,
+      w: (c.weight!=null && c.weight!=='' && !isNaN(Number(c.weight))) ? Number(c.weight) : null,
+      a: (c.waist!=null && c.waist!=='' && !isNaN(Number(c.waist))) ? Number(c.waist) : null
+    })).filter(p=>p.w!=null || p.a!=null);
+    if(pts.length<2){
+      svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">Need more weight/waist logs</text>';
+      return;
+    }
+    const ws = pts.map(p=>p.w).filter(v=>v!=null);
+    const as = pts.map(p=>p.a).filter(v=>v!=null);
+    const minW=Math.min(...ws), maxW=Math.max(...ws), rangeW=(maxW-minW)||1;
+    const minA=Math.min(...as.length?as:[0]), maxA=Math.max(...as.length?as:[1]), rangeA=(maxA-minA)||1;
+    const n=pts.length;
+    function xAt(i){ return pad+(i/(n-1||1))*(W-pad*2); }
+    function yW(v){ return H-pad-(((v-minW)/rangeW)*(H-pad*2)); }
+    function yA(v){ return H-pad-(((v-minA)/rangeA)*(H-pad*2)); }
+    let pathW='', pathA='';
+    pts.forEach((p,i)=>{
+      if(p.w!=null){ pathW += (pathW?'L':'M')+xAt(i)+','+yW(p.w)+' '; }
+      if(p.a!=null){ pathA += (pathA?'L':'M')+xAt(i)+','+yA(p.a)+' '; }
+    });
+    // Prefer continuous lines: rebuild only from points that have values with index-based x
+    const wPts = pts.map((p,i)=>({i,v:p.w})).filter(p=>p.v!=null);
+    const aPts = pts.map((p,i)=>({i,v:p.a})).filter(p=>p.v!=null);
+    pathW = wPts.map((p,j)=>(j===0?'M':'L')+xAt(p.i)+','+yW(p.v)).join(' ');
+    pathA = aPts.map((p,j)=>(j===0?'M':'L')+xAt(p.i)+','+yA(p.v)).join(' ');
+    let svgHTML = '';
+    if(pathW) svgHTML += `<path d="${pathW}" fill="none" stroke="#FFD600" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if(pathA) svgHTML += `<path d="${pathA}" fill="none" stroke="#7EE000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // First / last labels for weight
+    if(wPts.length){
+      const first=wPts[0], last=wPts[wPts.length-1];
+      svgHTML += `<circle cx="${xAt(first.i)}" cy="${yW(first.v)}" r="3.5" fill="#FFD600"/>`;
+      svgHTML += `<circle cx="${xAt(last.i)}" cy="${yW(last.v)}" r="3.5" fill="#FFD600"/>`;
+      svgHTML += `<text x="${xAt(last.i)}" y="${yW(last.v)-8}" text-anchor="middle" font-family="Barlow Condensed" font-size="10" font-weight="700" fill="#FFD600">${last.v}</text>`;
+    }
+    if(aPts.length){
+      const last=aPts[aPts.length-1];
+      svgHTML += `<circle cx="${xAt(last.i)}" cy="${yA(last.v)}" r="3.5" fill="#7EE000"/>`;
+      svgHTML += `<text x="${xAt(last.i)}" y="${Math.min(H-4, yA(last.v)+14)}" text-anchor="middle" font-family="Barlow Condensed" font-size="10" font-weight="700" fill="#7EE000">${last.v}</text>`;
+    }
+    svg.innerHTML = svgHTML;
+    if(legend){
+      const wChange = wPts.length>=2 ? (wPts[wPts.length-1].v - wPts[0].v) : null;
+      const aChange = aPts.length>=2 ? (aPts[aPts.length-1].v - aPts[0].v) : null;
+      legend.innerHTML = `<span style="color:#FFD600">● Weight${wChange!=null?' ('+(wChange>0?'+':'')+wChange.toFixed(1)+' kg)':''}</span>
+        <span style="color:#7EE000">● Waist${aChange!=null?' ('+(aChange>0?'+':'')+aChange.toFixed(1)+' in)':''}</span>
+        <span style="color:#666">${pts.length} logs</span>`;
+    }
+    // Weekly chips for weight when in body mode
+    if(wkEl){
+      const startDate=new Date(ci[0].date+'T00:00:00');
+      const weeks={};
+      ci.forEach(c=>{
+        if(c.weight==null||c.weight==='') return;
+        const dayN=Math.floor((new Date(c.date+'T00:00:00')-startDate)/(7*86400000));
+        const wk='W'+(dayN+1);
+        if(!weeks[wk])weeks[wk]=[];
+        weeks[wk].push(Number(c.weight));
+      });
+      const wkKeys=Object.keys(weeks).slice(0,12);
+      const firstAvg=weeks[wkKeys[0]]?weeks[wkKeys[0]].reduce((s,v)=>s+v,0)/weeks[wkKeys[0]].length:null;
+      wkEl.innerHTML=wkKeys.map((wk,i)=>{
+        const arr=weeks[wk];
+        const avg=arr.reduce((s,v)=>s+v,0)/arr.length;
+        const diff=i>0&&firstAvg?((avg-firstAvg)).toFixed(1):null;
+        const clr=diff===null?'var(--gry)':parseFloat(diff)<0?'var(--grn)':'var(--red)';
+        return `<div class="wk-chip"><div class="wk-n">${wk}</div><div class="wk-v">${avg.toFixed(1)}</div><div class="wk-d" style="color:${clr}">${diff!==null?(parseFloat(diff)>0?'+':'')+diff:'base'}</div></div>`;
+      }).join('') || '<div style="font-size:12px;color:var(--gry);padding:8px">Weekly weight averages</div>';
+    }
+    return;
+  }
+
+  // Single metric
   const vals=ci.map(c=>{
     let v=c[trendMetric];
     if(trendMetric==='water') v=waterToMl(c.water||0);
@@ -3290,8 +3413,6 @@ function renderTrend(){
   if(!vals.length){svg.innerHTML='<text x="150" y="70" text-anchor="middle" font-family="Barlow" font-size="11" fill="#555">No data for this metric</text>';return;}
   const minV=Math.min(...vals.map(p=>p.v)), maxV=Math.max(...vals.map(p=>p.v));
   const range=maxV-minV||1;
-  const W=300,H=130,pad=10;
-  // Draw line
   const pts=vals.map((p,i)=>{
     const x=pad+(i/(vals.length-1||1))*(W-pad*2);
     const y=H-pad-(((p.v-minV)/range)*(H-pad*2));
@@ -3305,13 +3426,11 @@ function renderTrend(){
   let svgHTML=`<defs><linearGradient id="ag" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="${lineColor}" stop-opacity=".2"/><stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/></linearGradient></defs>`;
   svgHTML+=`<path d="${areaD}" fill="url(#ag)"/>`;
   svgHTML+=`<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
-  // Dots for first, last, min, max
   [0,pts.length-1].forEach(i=>{
     svgHTML+=`<circle cx="${pts[i].x}" cy="${pts[i].y}" r="4" fill="${lineColor}"/>`;
     const lab=trendMetric==='water'?formatWaterShort(pts[i].v):pts[i].v;
     svgHTML+=`<text x="${pts[i].x}" y="${pts[i].y-7}" text-anchor="middle" font-family="Barlow Condensed" font-size="10" font-weight="700" fill="${lineColor}">${lab}</text>`;
   });
-  // Baseline ref line
   if(CU&&(trendMetric==='weight'||trendMetric==='waist')){
     const ub=VIEWUSER||CU;
     const baseVal=trendMetric==='weight'?ub.baseWeight:ub.baseWaist;
@@ -3323,8 +3442,7 @@ function renderTrend(){
   }
   svg.innerHTML=svgHTML;
 
-  // Weekly averages — group by week (7-day blocks from first check-in)
-  const sorted=[...ci].sort((a,b)=>a.date.localeCompare(b.date));
+  const sorted=[...ci];
   const startDate=new Date(sorted[0].date+'T00:00:00');
   const weeks={};
   sorted.forEach(c=>{
@@ -3337,7 +3455,7 @@ function renderTrend(){
   });
   const wkKeys=Object.keys(weeks).slice(0,12);
   const firstAvg=weeks[wkKeys[0]]?weeks[wkKeys[0]].reduce((s,v)=>s+v,0)/weeks[wkKeys[0]].length:null;
-  wkEl.innerHTML=wkKeys.map((wk,i)=>{
+  if(wkEl) wkEl.innerHTML=wkKeys.map((wk,i)=>{
     const arr=weeks[wk];
     const avg=arr.reduce((s,v)=>s+v,0)/arr.length;
     const diff=i>0&&firstAvg?((avg-firstAvg)).toFixed(1):null;
@@ -3435,15 +3553,23 @@ function renderDash(){
       dp.innerHTML=`<div class="dash-prog-card"><div class="dpc-ttl">Your program</div><div class="dpc-desc">Loading…</div></div>`;
     } else if(st.state==='ready' && st.prog){
       const p=st.prog;
-      const firstDay=(p.days&&p.days[0])?p.days[0]:null;
+      const next=nextProgramSession(u, wkts);
+      const day=next?next.day:((p.days&&p.days[0])?p.days[0]:null);
+      const dayName=day?(day.name||('Day '+(next?next.index+1:1))):'';
+      const dayMeta=next?('Session '+(next.index+1)+' of '+next.total):'';
       dp.style.display='block';
       dp.innerHTML=`<div class="dash-prog-card">
         <div class="dpc-ttl">📋 Your program</div>
         <div class="dpc-nm">${escHtml(p.name)}</div>
+        ${day?`<div style="margin:10px 0 6px;padding:10px 12px;background:#000;border:1px solid rgba(255,214,0,.35);border-radius:10px">
+          <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em">Next session</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600;margin-top:2px">${escHtml(dayName)}</div>
+          <div style="font-size:11px;color:var(--gry);margin-top:2px">${escHtml(dayMeta)}${(day.exercises&&day.exercises.length)?' · '+day.exercises.length+' exercises':''}</div>
+        </div>`:''}
         ${p.description?`<div class="dpc-desc">${escHtml(p.description)}</div>`:''}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="b-secondary" style="width:auto;padding:8px 14px;font-size:12px" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Open Train</button>
-          ${firstDay?`<button class="b-grn" style="width:auto;padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none;border-radius:8px;font-weight:800;cursor:pointer" onclick="startWorkoutFromProgramDay('${p.id}','${firstDay.id}')">▶ Log a day</button>`:''}
+          ${day?`<button class="b-grn" style="width:auto;padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none;border-radius:8px;font-weight:800;cursor:pointer" onclick="startWorkoutFromProgramDay('${p.id}','${day.id}')">▶ Log ${escHtml(dayName)}</button>`:''}
         </div>
       </div>`;
     } else if(st.state==='none' && u.status==='approved'){
@@ -3470,11 +3596,44 @@ function renderDash(){
 
   document.getElementById('totCI').textContent=ci.length;
   const ciStreak=calcStreak(ci);
-  const wStreak=calcWorkoutStreak(wkts);
-  document.getElementById('strN').textContent=ciStreak;
-  // Show combined adherence under streak label if possible
+  const wStreak=typeof calcWorkoutStreak==='function'?calcWorkoutStreak(wkts):0;
+  const strCard=document.querySelector('.str-card');
+  const strN=document.getElementById('strN');
   const strL=document.querySelector('.str-l');
-  if(strL)strL.textContent=wStreak?(`Day streak · ${wStreak}d train`):'Day streak';
+  // Real streak only: show when 3+ days, otherwise hide the celebration card
+  if(strCard){
+    if(ciStreak>=3){
+      strCard.style.display='flex';
+      if(strN) strN.textContent=ciStreak;
+      if(strL) strL.textContent=wStreak?('Day streak · '+wStreak+'d train'):'Day streak';
+    } else {
+      strCard.style.display='none';
+    }
+  }
+  // Short win line (body progress)
+  try{
+    let winEl=document.getElementById('dashWinLine');
+    if(!winEl){
+      winEl=document.createElement('div');
+      winEl.id='dashWinLine';
+      const after=document.querySelector('.str-card');
+      if(after&&after.parentNode) after.parentNode.insertBefore(winEl, after.nextSibling);
+      else {
+        const cont=document.getElementById('dashContent');
+        if(cont) cont.insertBefore(winEl, cont.firstChild);
+      }
+    }
+    const win=bodyWinLine(u, ci);
+    if(win){
+      winEl.style.display='block';
+      winEl.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.3);background:rgba(255,214,0,.06)">
+        <div style="font-size:13px;font-weight:700;color:var(--grn)">✨ ${escHtml(win)}</div>
+      </div>`;
+    } else {
+      winEl.style.display='none';
+      winEl.innerHTML='';
+    }
+  }catch(e){}
   // Quick actions: reminders + message coach
   let qa=document.getElementById('dashQuickActions');
   if(!qa){
@@ -3885,7 +4044,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
         <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
-        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills last-7-day counts. You add MyNetDiary + guarantee. Optional note becomes FOCUS NEXT WEEK. WhatsApp bold uses *stars*.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills counts, wins above 85%, what is leading, and what is dragging. Optional note overrides the auto FOCUS NEXT WEEK. Add MyNetDiary numbers for a fuller picture.</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
             <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
@@ -3914,9 +4073,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
-        ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="exportUserPDF('${u.email}')">📄 PDF</button>`:''}
-        ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserCSV('${u.email}')">⬇️ CSV</button>`:''}
-        ${!isPend&&ci.length?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="exportUserWeekCSV('${u.email}')">📅 Week CSV</button>`:''}
+        ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="viewMember('${u.email}');setTimeout(function(){try{shareBodyChartImage()}catch(e){}},400)">📈 Chart</button>`:''}
         ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
         <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'📦 Archive'}</button>
       </div>
@@ -4705,11 +4862,38 @@ function buildWeeklyClientMessage(email){
   const foodEl = document.getElementById('wkFood-'+id);
   const guarEl = document.getElementById('wkGuar-'+id);
   const noteEl = document.getElementById('wkNote-'+id);
-  const pro = proEl && proEl.value !== '' ? proEl.value : null;
-  const food = foodEl && foodEl.value !== '' ? foodEl.value : null;
+  const pro = proEl && proEl.value !== '' ? Number(proEl.value) : null;
+  const food = foodEl && foodEl.value !== '' ? Number(foodEl.value) : null;
   const guar = guarEl ? (guarEl.value||'') : '';
   const note = noteEl ? (noteEl.value||'').trim() : '';
   const first = (u.name||'there').split(' ')[0];
+
+  // Score each habit 0–100 for last 7 days (target-met where it matters)
+  const scores = [
+    {key:'weight', label:'Weigh-ins', pct: Math.round((c.daysWeighed/7)*100), tip:'Weigh in every morning, same conditions'},
+    {key:'waist', label:'Waist logging', pct: Math.round((c.daysWaist/7)*100), tip:'Log waist with the same morning routine'},
+    {key:'steps', label:'Steps at target', pct: Math.round((c.daysStepsMet/7)*100), tip:'Hit your step target at least 5 days'},
+    {key:'water', label:'Water at target', pct: Math.round((c.daysWaterMet/7)*100), tip:'Hit your water target at least 5 days'},
+    {key:'sleep', label:'Sleep logging', pct: Math.round((c.daysSleep/7)*100), tip:'Log sleep every day so we can see the pattern'},
+    {key:'training', label:'Training', pct: c.trainingPct, tip:'Complete your planned training sessions'},
+  ];
+  if(pro!=null && !isNaN(pro)) scores.push({key:'protein', label:'Protein target', pct: Math.round((pro/7)*100), tip:'Hit protein on more days in MyNetDiary'});
+  if(food!=null && !isNaN(food)) scores.push({key:'food', label:'Food logging', pct: Math.round((food/7)*100), tip:'Log food every day in MyNetDiary'});
+
+  const ranked = scores.slice().sort((a,b)=>b.pct-a.pct);
+  const wins = ranked.filter(s=>s.pct>=85);
+  const leader = ranked[0];
+  const drag = ranked.slice().sort((a,b)=>a.pct-b.pct)[0]; // weakest
+  const weakList = ranked.filter(s=>s.pct<85).sort((a,b)=>a.pct-b.pct);
+
+  let autoFocus = '';
+  if(drag && drag.pct < 85){
+    autoFocus = drag.tip + ' ('+drag.label+' was at '+drag.pct+' percent this week).';
+  } else if(drag){
+    autoFocus = 'Keep the same standard. Everything sat at or above 85 percent.';
+  }
+  // Coach note overrides auto focus text, but we still show wins/drag sections
+  const focusText = note || autoFocus;
 
   let parts = [];
   parts.push('Hi '+first+',');
@@ -4748,15 +4932,43 @@ function buildWeeklyClientMessage(email){
     parts.push('');
   }
 
+  // Wins above 85%
+  parts.push('*ON TRACK (85%+)*');
+  if(wins.length){
+    wins.forEach(s=>{
+      parts.push(s.label+': *'+s.pct+'%*');
+    });
+  } else {
+    parts.push('Nothing crossed 85% yet. We fix one thing at a time.');
+  }
+  parts.push('');
+
+  if(leader){
+    parts.push('*LEADING*');
+    parts.push(leader.label+' at *'+leader.pct+'%*');
+    parts.push('');
+  }
+
+  // What's dragging adherence
+  parts.push('*NEEDS WORK*');
+  if(weakList.length){
+    weakList.slice(0,3).forEach(s=>{
+      parts.push(s.label+': *'+s.pct+'%*');
+    });
+  } else {
+    parts.push('No weak spots this week.');
+  }
+  parts.push('');
+
   if(guar){
     parts.push('*GUARANTEE*');
     parts.push('*'+guar+'*');
     parts.push('');
   }
 
-  if(note){
+  if(focusText){
     parts.push('*FOCUS NEXT WEEK*');
-    parts.push(note);
+    parts.push(focusText);
     parts.push('');
   }
 
@@ -4851,6 +5063,118 @@ async function saveCoachTargets(email){
 
 
 // Share progress image
+
+function shareBodyChartImage(){
+  const u=VIEWUSER||CU;if(!u)return;
+  const ci=myCI().slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const pts=ci.map(c=>({
+    date:c.date,
+    w:(c.weight!=null&&c.weight!==''&&!isNaN(Number(c.weight)))?Number(c.weight):null,
+    a:(c.waist!=null&&c.waist!==''&&!isNaN(Number(c.waist)))?Number(c.waist):null
+  })).filter(p=>p.w!=null||p.a!=null);
+  if(pts.length<2){ toast('Need at least 2 weight or waist logs','a'); return; }
+
+  const canvas=document.createElement('canvas');
+  canvas.width=1080; canvas.height=1350;
+  const ctx=canvas.getContext('2d');
+  // Background
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,1080,1350);
+  // Accent bar
+  ctx.fillStyle='#FFD600'; ctx.fillRect(0,0,1080,8);
+
+  ctx.fillStyle='#FFD600';
+  ctx.font='bold 48px Barlow Condensed, Arial Black, sans-serif';
+  ctx.fillText('SHREDLANE', 60, 80);
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 56px Barlow Condensed, Arial Black, sans-serif';
+  ctx.fillText((u.name||'Client').split(' ')[0], 60, 150);
+  ctx.fillStyle='#888';
+  ctx.font='28px Barlow, Arial, sans-serif';
+  ctx.fillText('Weight & waist · all time', 60, 195);
+
+  const wPts=pts.filter(p=>p.w!=null);
+  const aPts=pts.filter(p=>p.a!=null);
+  const firstW=wPts[0], lastW=wPts[wPts.length-1];
+  const firstA=aPts[0], lastA=aPts[aPts.length-1];
+  let y=260;
+  if(firstW&&lastW){
+    const d=lastW.w-firstW.w;
+    ctx.fillStyle='#FFD600'; ctx.font='bold 32px Barlow Condensed, sans-serif';
+    ctx.fillText('WEIGHT', 60, y);
+    ctx.fillStyle='#fff'; ctx.font='bold 44px Barlow Condensed, sans-serif';
+    ctx.fillText(firstW.w+' → '+lastW.w+' kg', 60, y+50);
+    ctx.fillStyle=d<=0?'#7EE000':'#FF3B30';
+    ctx.font='bold 30px Barlow, sans-serif';
+    ctx.fillText((d>0?'+':'')+d.toFixed(1)+' kg overall', 60, y+95);
+    y+=140;
+  }
+  if(firstA&&lastA){
+    const d=lastA.a-firstA.a;
+    ctx.fillStyle='#7EE000'; ctx.font='bold 32px Barlow Condensed, sans-serif';
+    ctx.fillText('WAIST', 60, y);
+    ctx.fillStyle='#fff'; ctx.font='bold 44px Barlow Condensed, sans-serif';
+    ctx.fillText(firstA.a+' → '+lastA.a+' in', 60, y+50);
+    ctx.fillStyle=d<=0?'#7EE000':'#FF3B30';
+    ctx.font='bold 30px Barlow, sans-serif';
+    ctx.fillText((d>0?'+':'')+d.toFixed(1)+' in overall', 60, y+95);
+    y+=140;
+  }
+
+  // Chart area
+  const cx=80, cy=y+20, cw=920, ch=420;
+  ctx.fillStyle='#111'; ctx.fillRect(cx-20, cy-20, cw+40, ch+40);
+  const minW=Math.min(...wPts.map(p=>p.w)), maxW=Math.max(...wPts.map(p=>p.w));
+  const minA=aPts.length?Math.min(...aPts.map(p=>p.a)):0;
+  const maxA=aPts.length?Math.max(...aPts.map(p=>p.a)):1;
+  const rangeW=(maxW-minW)||1, rangeA=(maxA-minA)||1;
+  const n=pts.length;
+  function xAt(i){ return cx+(i/(n-1||1))*cw; }
+  function yWv(v){ return cy+ch-(((v-minW)/rangeW)*ch); }
+  function yAv(v){ return cy+ch-(((v-minA)/rangeA)*ch); }
+
+  // Weight line
+  ctx.strokeStyle='#FFD600'; ctx.lineWidth=4; ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath();
+  let started=false;
+  pts.forEach((p,i)=>{
+    if(p.w==null) return;
+    const x=xAt(i), yy=yWv(p.w);
+    if(!started){ ctx.moveTo(x,yy); started=true; } else ctx.lineTo(x,yy);
+  });
+  ctx.stroke();
+  // Waist line
+  ctx.strokeStyle='#7EE000'; ctx.lineWidth=4;
+  ctx.beginPath(); started=false;
+  pts.forEach((p,i)=>{
+    if(p.a==null) return;
+    const x=xAt(i), yy=yAv(p.a);
+    if(!started){ ctx.moveTo(x,yy); started=true; } else ctx.lineTo(x,yy);
+  });
+  ctx.stroke();
+
+  // Legend
+  ctx.fillStyle='#FFD600'; ctx.fillRect(cx, cy+ch+40, 24, 24);
+  ctx.fillStyle='#fff'; ctx.font='26px Barlow, sans-serif'; ctx.fillText('Weight', cx+36, cy+ch+60);
+  ctx.fillStyle='#7EE000'; ctx.fillRect(cx+200, cy+ch+40, 24, 24);
+  ctx.fillStyle='#fff'; ctx.fillText('Waist', cx+236, cy+ch+60);
+  ctx.fillStyle='#666'; ctx.font='24px Barlow, sans-serif';
+  ctx.fillText(pts.length+' check-ins · consistency compounds', cx, cy+ch+110);
+
+  ctx.fillStyle='#FFD600'; ctx.font='bold 26px Barlow Condensed, sans-serif';
+  ctx.fillText('shredlane', 60, 1300);
+
+  canvas.toBlob(blob=>{
+    if(!blob){ toast('Could not create image','r'); return; }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='shredlane-body-'+((u.name||'client').split(' ')[0])+'-'+today()+'.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('📈 Chart image saved — share for marketing','g');
+  },'image/png');
+}
+
+
 function shareProgressImage(){
   const u=VIEWUSER||CU;if(!u)return;
   const ci=myCI().slice().sort((a,b)=>a.date.localeCompare(b.date));
