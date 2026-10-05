@@ -908,6 +908,10 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <!-- Logger — hidden until they tap a program day or custom log -->
     <div class="card" id="wktLoggerCard" style="display:none;margin-top:12px">
       <div class="card-lbl" id="wktLoggerLbl">Log session</div>
+      <div style="font-size:12px;color:var(--gry);margin:-4px 0 12px;line-height:1.45;padding:10px 12px;background:rgba(255,214,0,.06);border:1px solid rgba(255,214,0,.25);border-radius:10px">
+        <strong style="color:var(--grn)">After each set, tap ✓</strong> so it saves right away.<br>
+        <span style="color:#888">Finish session also saves any sets you filled in but forgot to tick.</span>
+      </div>
       <div class="wkt-hdr-row">
         <input class="wkt-title-in" id="wktTitleIn" placeholder="Workout name (e.g. Push Day)" aria-label="Workout name">
         <input class="dp-native" id="wktDateIn" type="date" style="width:150px;margin-top:0" onchange="onWktDateChange()" aria-label="Workout date">
@@ -2546,14 +2550,14 @@ function renderExerciseBuilder(){
       </div>
       ${prev?`<div class="prev-perf">Last (${prev.date.slice(5)}): ${escHtml(prev.sets)}</div>`:''}
       <div class="set-hdr-row">
-        <div></div><div class="set-hdr-lbl">Reps</div><div class="set-hdr-lbl">Weight (kg)</div><div></div>
+        <div></div><div class="set-hdr-lbl">Reps</div><div class="set-hdr-lbl">Weight (kg)</div><div class="set-hdr-lbl">Done</div>
       </div>
       ${ex.sets.map((s,si)=>`
         <div class="set-row${s.done?' done-set':''}">
           <div class="set-n">${si+1}</div>
           <input class="set-in" type="number" inputmode="numeric" placeholder="${s.hint?('target '+escAttr(s.hint)):'reps'}" value="${s.reps!==''&&s.reps!=null?s.reps:''}" oninput="updateSet(${ei},${si},'reps',this.value)" aria-label="Reps set ${si+1}">
           <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
-          <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Set saved':'Mark set done and save'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
+          <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Saved — tap to undo':'Tap ✓ to save this set'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
         </div>`).join('')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="add-set-btn" onclick="addSet(${ei});startRestTimer(90)">＋ Add Set · Rest 90s</button>
@@ -2778,6 +2782,17 @@ async function saveWorkout(){
   const u=VIEWUSER||CU;
   const title=document.getElementById('wktTitleIn').value.trim();
   const d=document.getElementById('wktDateIn').value||today();
+  // Auto-tick filled sets so Finish session never drops unticked work
+  let autoTicked = 0;
+  (wktBuilder.exercises||[]).forEach(ex=>{
+    (ex.sets||[]).forEach(s=>{
+      if(s.done) return;
+      const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+      if(hasReps || hasWt){ s.done = true; autoTicked++; }
+    });
+  });
+  if(autoTicked){ try{ renderExerciseBuilder(); }catch(e){} }
   const exercises=wktBuilder.exercises.map((ex,i)=>({
     name:(ex.name||'').trim()||('Exercise '+(i+1)),
     sets:(ex.sets||[]).map(s=>({
@@ -2822,7 +2837,7 @@ async function saveWorkout(){
       const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
       toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
     } else {
-      toast(isUpdate?'✅ Session updated':'✅ Session finished','g');
+      toast((isUpdate?'✅ Session updated':'✅ Session finished')+(autoTicked?(' · '+autoTicked+' set(s) auto-saved'):''),'g');
     }
     closeWorkoutLogger();
     renderWorkoutsScreen();
