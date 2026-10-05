@@ -401,6 +401,10 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .set-in:focus{outline:none;border-color:var(--grn)}
 .set-in::placeholder{color:var(--gry2);font-family:'Barlow',sans-serif;font-size:11px}
 .set-del{background:none;border:none;color:var(--gry);font-size:15px;cursor:pointer;padding:2px}
+.set-done-btn{width:36px;height:36px;border-radius:10px;border:1px solid #333;background:#111;color:#666;font-size:16px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.set-done-btn.on{border-color:rgba(126,224,0,.6);background:rgba(126,224,0,.15);color:#7EE000}
+.set-row.done-set{opacity:.85}
+.set-row.done-set .set-in{border-color:rgba(126,224,0,.25)}
 .set-hdr-row{display:grid;grid-template-columns:24px 1fr 1fr 26px;gap:6px;margin-bottom:5px}
 .set-hdr-lbl{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--gry2);text-align:center}
 .add-set-btn{width:100%;padding:8px;background:var(--grn-dim);border:1px dashed rgba(255,214,0,.35);border-radius:8px;color:var(--grn);font-family:'Barlow',sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-top:2px}
@@ -2440,7 +2444,7 @@ let wktBuilder={id:null,date:today(),title:'',exercises:[]};
 let pendingWorkoutPrefill=null;
 let wktLoggerOpen=false;
 
-function newExercise(){return{name:'',sets:[{reps:'',weight:''}]}}
+function newExercise(){return{name:'',sets:[{reps:'',weight:'',done:false}]}}
 
 function showWorkoutLogger(show){
   const card=document.getElementById('wktLoggerCard');
@@ -2531,11 +2535,11 @@ function renderExerciseBuilder(){
         <div></div><div class="set-hdr-lbl">Reps</div><div class="set-hdr-lbl">Weight (kg)</div><div></div>
       </div>
       ${ex.sets.map((s,si)=>`
-        <div class="set-row">
+        <div class="set-row${s.done?' done-set':''}">
           <div class="set-n">${si+1}</div>
           <input class="set-in" type="number" inputmode="numeric" placeholder="${s.hint?('target '+escAttr(s.hint)):'reps'}" value="${s.reps!==''&&s.reps!=null?s.reps:''}" oninput="updateSet(${ei},${si},'reps',this.value)" aria-label="Reps set ${si+1}">
           <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
-          <button class="set-del" onclick="removeSet(${ei},${si});startRestTimer(90)" title="Remove set / start rest" aria-label="Remove set">✕</button>
+          <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Set saved':'Mark set done and save'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
         </div>`).join('')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
         <button class="add-set-btn" onclick="addSet(${ei});startRestTimer(90)">＋ Add Set · Rest 90s</button>
@@ -2572,15 +2576,86 @@ function updateExName(ei,v){
   if(empty && v && v.trim().length>=3){
     const prev = lastPerformanceForExercise(v);
     if(prev && prev.length){
-      ex.sets = prev.map(s=>({reps:s.reps, weight:s.weight}));
+      ex.sets = prev.map(s=>({reps:s.reps, weight:s.weight, done:false}));
       try{ renderExerciseBuilder(); }catch(e){}
       toast('Pre-filled last session for '+v.trim(),'g');
     }
   }
 }
 function updateSet(ei,si,field,v){const ex=wktBuilder.exercises[ei];if(!ex||!ex.sets[si])return;ex.sets[si][field]=v;}
-function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:''});renderExerciseBuilder();}
-function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:''});renderExerciseBuilder();}
+function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:'',done:false});renderExerciseBuilder();}
+function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:'',done:false});renderExerciseBuilder();}
+
+function toggleSetDone(ei, si){
+  const ex = wktBuilder.exercises[ei];
+  if(!ex || !ex.sets[si]) return;
+  const s = ex.sets[si];
+  // Mark done and save progress (does not require all sets)
+  s.done = !s.done;
+  if(s.done){
+    try{ startRestTimer(90); }catch(e){}
+    renderExerciseBuilder();
+    saveWorkoutProgress(true); // silent-ish autosave, stay on logger
+  } else {
+    renderExerciseBuilder();
+    saveWorkoutProgress(true);
+  }
+}
+
+/** Save current workout builder without closing the logger (for set-by-set ticks) */
+async function saveWorkoutProgress(quiet){
+  if(!CU) return;
+  if(VIEWUSER){ if(!quiet) toast('Coach view is read-only','a'); return; }
+  if(CU.status==='pending'){ if(!quiet) toast('Awaiting approval','a'); return; }
+  const u = CU;
+  const titleEl = document.getElementById('wktTitleIn');
+  const dateEl = document.getElementById('wktDateIn');
+  const title = titleEl ? titleEl.value.trim() : (wktBuilder.title||'');
+  const d = dateEl ? (dateEl.value||today()) : (wktBuilder.date||today());
+  // Keep sets that have reps/weight OR are marked done; drop pure empty unfinished rows at end only when final save
+  const exercises = wktBuilder.exercises.map((ex,i)=>({
+    name: (ex.name||'').trim()||('Exercise '+(i+1)),
+    sets: (ex.sets||[]).map(s=>({
+      reps: (s.reps===''||s.reps==null)?null:parseInt(s.reps,10),
+      weight: (s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight)),
+      done: !!s.done
+    })).filter(s=> s.done || s.reps!=null || s.weight!=null || true) // keep structure while logging
+  })).filter(ex=>ex.name);
+  if(!wktBuilder.id) wktBuilder.id = 'w'+Date.now();
+  const entry = {id:wktBuilder.id, date:d, title, exercises, updatedAt: Date.now()};
+  try{
+    const ref = fdb.collection('workouts').doc(u.email);
+    let list = [];
+    if(CACHE.workouts && Array.isArray(CACHE.workouts[u.email])){
+      list = CACHE.workouts[u.email].filter(e=>e&&e.date&&e.id).map(e=>({...e}));
+    }
+    if(navigator.onLine!==false){
+      try{
+        const snap = await ref.get();
+        if(snap.exists){
+          const data = snap.data();
+          list = (Array.isArray(data.entries)?data.entries:[]).filter(e=>e&&e.date&&e.id);
+        }
+      }catch(e){}
+    }
+    const idx = list.findIndex(w=>w.id===entry.id);
+    if(idx>=0) list[idx]=entry; else list.push(entry);
+    await ref.set({entries:list});
+    CACHE.workouts[u.email]=list;
+    if(quiet) toast('✓ Set saved','g');
+    else toast('Progress saved','g');
+  }catch(e){
+    console.error(e);
+    if(!CACHE.workouts) CACHE.workouts={};
+    CACHE.workouts[u.email]=CACHE.workouts[u.email]||[];
+    const localIdx=CACHE.workouts[u.email].findIndex(w=>w.id===entry.id);
+    if(localIdx>=0) CACHE.workouts[u.email][localIdx]=entry;
+    else CACHE.workouts[u.email].push(entry);
+    if(quiet) toast('✓ Saved on phone','a');
+  }
+}
+
+
 
 
 // ── Personal records (weight + reps / estimated 1RM) ──
@@ -2686,9 +2761,10 @@ async function saveWorkout(){
     name:(ex.name||'').trim()||('Exercise '+(i+1)),
     sets:(ex.sets||[]).map(s=>({
       reps:(s.reps===''||s.reps==null)?null:parseInt(s.reps,10),
-      weight:(s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight))
-    }))
-  }));
+      weight:(s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight)),
+      done:!!s.done
+    })).filter(s=> s.done || s.reps!=null || s.weight!=null) // keep only sets with data or ticked done
+  })).filter(ex=> (ex.sets||[]).length>0 || (ex.name&&ex.name.indexOf('Exercise')!==0));
   // Assign id once so double-taps update the same entry instead of creating duplicates
   if(!wktBuilder.id) wktBuilder.id = 'w'+Date.now();
   const entry={id:wktBuilder.id,date:d,title,exercises};
@@ -2748,7 +2824,7 @@ async function saveWorkout(){
 function editWorkout(id){
   const w=myWorkouts().find(x=>x.id===id);
   if(!w)return;
-  wktBuilder={id:w.id,date:w.date,title:w.title||'',exercises:w.exercises.map(ex=>({name:ex.name,sets:ex.sets.map(s=>({reps:s.reps??'',weight:s.weight??''}))}))};
+  wktBuilder={id:w.id,date:w.date,title:w.title||'',exercises:w.exercises.map(ex=>({name:ex.name,sets:(ex.sets||[]).map(s=>({reps:s.reps??'',weight:s.weight??'',done:!!s.done}))}))};
   showWorkoutLogger(true);
   document.getElementById('wktTitleIn').value=w.title||'';
   document.getElementById('wktDateIn').value=w.date;
