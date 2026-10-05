@@ -914,7 +914,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
       <div id="exList"></div>
       <button class="add-ex-btn" onclick="addExercise()">＋ Add Exercise</button>
-      <button class="save-btn" id="saveWktBtn" onclick="saveWorkout()">🏋️ Save Workout</button>
+      <button class="save-btn" id="saveWktBtn" onclick="saveWorkout()">✓ Finish session</button>
       <div style="text-align:center;margin-top:8px" id="cancelEditWrap"></div>
     </div>
     <div id="wktFromProgWrap" style="display:none"></div>
@@ -2487,7 +2487,7 @@ function initWorkoutForm(){
   titleEl.value=wktBuilder.title||'';
   dateEl.value=wktBuilder.date;
   if(cancel && !wktBuilder.id) cancel.innerHTML='<button class="cal-toggle-btn" onclick="closeWorkoutLogger()">✕ Cancel</button>';
-  if(saveBtn && !wktBuilder.id) saveBtn.textContent='🏋️ Save Workout';
+  if(saveBtn && !wktBuilder.id) saveBtn.textContent='✓ Finish session';
   renderExerciseBuilder();
   renderWorkoutsScreen();
 }
@@ -2590,13 +2590,20 @@ function toggleSetDone(ei, si){
   const ex = wktBuilder.exercises[ei];
   if(!ex || !ex.sets[si]) return;
   const s = ex.sets[si];
-  // Mark done and save progress (does not require all sets)
-  s.done = !s.done;
-  if(s.done){
+  // Allow untick anytime; only allow tick when reps or weight entered
+  if(!s.done){
+    const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+    const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+    if(!hasReps && !hasWt){
+      toast('Enter reps or weight before ticking the set','a');
+      return;
+    }
+    s.done = true;
     try{ startRestTimer(90); }catch(e){}
     renderExerciseBuilder();
-    saveWorkoutProgress(true); // silent-ish autosave, stay on logger
+    saveWorkoutProgress(true);
   } else {
+    s.done = false;
     renderExerciseBuilder();
     saveWorkoutProgress(true);
   }
@@ -2801,7 +2808,7 @@ async function saveWorkout(){
       const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
       toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
     } else {
-      toast(isUpdate?'✅ Workout updated':'✅ Workout saved','g');
+      toast(isUpdate?'✅ Session updated':'✅ Session finished','g');
     }
     closeWorkoutLogger();
     renderWorkoutsScreen();
