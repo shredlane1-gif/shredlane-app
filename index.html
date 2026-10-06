@@ -941,6 +941,15 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="scr-ttl">ADMIN</div>
     <div class="scr-sub">Coach dashboard</div>
     <div class="adm-banner">🔒 Private — coach view only</div>
+    <div class="card" style="margin-bottom:12px;padding:14px 16px">
+      <div class="card-lbl" style="margin-bottom:6px">App link for new clients</div>
+      <div style="font-size:12px;color:var(--gry);margin-bottom:10px">Share this so new members can open Shredlane and request to join.</div>
+      <div id="adminAppLink" style="font-size:13px;font-weight:600;color:var(--grn);word-break:break-all;padding:10px 12px;background:#000;border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px">—</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="approve-btn" style="padding:8px 14px;font-size:12px" onclick="copyAppLink()">📋 Copy link</button>
+        <button class="approve-btn" style="padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none" onclick="shareAppLinkWhatsApp()">📲 Share on WhatsApp</button>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="b-secondary" style="padding:10px 16px;" onclick="exportAllCSV()">⬇️ Download all data (CSV)</button></div>
     <div class="card" id="commStatsCard">
       <div class="card-lbl" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin:0" onclick="toggleAdminSection('commStats')">
@@ -4195,6 +4204,7 @@ function exportUserWeekCSV(email){
 
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
+  try{ refreshAdminAppLink(); }catch(e){}
   try{ renderAdminRiskAndBulk(); }catch(e){ console.error('risk panel', e); }
   const d=gDB();
   // Dedupe by email (avoid double entries from casing/id mismatch). Prefer approved > pending.
@@ -5149,6 +5159,41 @@ function enableReminders(){
 }
 
 // WhatsApp coach link
+
+function getAppShareLink(){
+  try{
+    // Clean URL without hash for clients
+    const u = new URL(window.location.href);
+    u.hash = '';
+    u.search = '';
+    return u.toString().replace(/\/$/,'') || window.location.origin;
+  }catch(e){
+    return window.location.origin || window.location.href;
+  }
+}
+function refreshAdminAppLink(){
+  const el = document.getElementById('adminAppLink');
+  if(el) el.textContent = getAppShareLink();
+}
+function copyAppLink(){
+  const link = getAppShareLink();
+  refreshAdminAppLink();
+  try{
+    navigator.clipboard.writeText(link);
+    toast('App link copied','g');
+  }catch(e){
+    toast('Copy manually: '+link,'a');
+  }
+}
+function shareAppLinkWhatsApp(){
+  const link = getAppShareLink();
+  refreshAdminAppLink();
+  const body = 'Hi! Join me on Shredlane (your training & check-in app):\\n\\n'+link+'\\n\\nOpen the link, create your account, and wait for coach approval.';
+  try{ navigator.clipboard.writeText(body); }catch(e){}
+  window.open('https://wa.me/?text='+encodeURIComponent(body), '_blank');
+  toast('WhatsApp opened with invite message','g');
+}
+
 function messageCoach(text){
   const msg=encodeURIComponent(text||'Hi coach — quick update from Shredlane');
   window.open('https://wa.me/254705671119?text='+msg,'_blank');
