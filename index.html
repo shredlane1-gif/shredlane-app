@@ -944,7 +944,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="card" style="margin-bottom:12px;padding:14px 16px">
       <div class="card-lbl" style="margin-bottom:6px">App link for new clients</div>
       <div style="font-size:12px;color:var(--gry);margin-bottom:10px">Share this so new members can open Shredlane and request to join.</div>
-      <div id="adminAppLink" style="font-size:13px;font-weight:600;color:var(--grn);word-break:break-all;padding:10px 12px;background:#000;border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px">—</div>
+      <a id="adminAppLink" href="#" target="_blank" rel="noopener" style="display:block;font-size:13px;font-weight:600;color:var(--grn);word-break:break-all;padding:10px 12px;background:#000;border:1px solid var(--bdr);border-radius:8px;margin-bottom:10px;text-decoration:underline">—</a>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="approve-btn" style="padding:8px 14px;font-size:12px" onclick="copyAppLink()">📋 Copy link</button>
         <button class="approve-btn" style="padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none" onclick="shareAppLinkWhatsApp()">📲 Share on WhatsApp</button>
@@ -5173,7 +5173,10 @@ function getAppShareLink(){
 }
 function refreshAdminAppLink(){
   const el = document.getElementById('adminAppLink');
-  if(el) el.textContent = getAppShareLink();
+  if(!el) return;
+  const link = getAppShareLink();
+  el.textContent = link;
+  el.href = link;
 }
 function copyAppLink(){
   const link = getAppShareLink();
