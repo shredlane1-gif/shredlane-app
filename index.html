@@ -534,11 +534,11 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 </div>
 <div id="restTimer" aria-live="polite">
   <div style="font-size:10px;font-weight:800;color:var(--gry);letter-spacing:.08em;text-transform:uppercase">Rest</div>
-  <div class="rt-time" id="restTimerDisplay">1:30</div>
+  <div class="rt-time" id="restTimerDisplay">2:30</div>
   <div class="rt-btns">
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(60)">60s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(90)">90s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(120)">2m</button>
+    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(150)">2:30</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="extendRestTimer(30)">+30s</button>
     <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="stopRestTimer()">✕</button>
   </div>
@@ -675,7 +675,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <button class="tb" id="tbHistory" onclick="goTab('history',this)"><span class="tb-i">📅</span><span class="tb-l">History</span></button>
     <button class="tb" id="tbWorkouts" onclick="goTab('workouts',this)"><span class="tb-i">🏋️</span><span class="tb-l">Train</span></button>
     <button class="tb" id="photosTab" onclick="goTab('photos',this)"><span class="tb-i">📸</span><span class="tb-l">Photos</span></button>
-    <button class="tb" id="libraryTab" onclick="goTab('library',this)"><span class="tb-i">🎬</span><span class="tb-l">Library</span></button>
+    <button class="tb" id="libraryTab" onclick="goTab('library',this)" style="display:none"><span class="tb-i">🎬</span><span class="tb-l">Library</span></button>
     <button class="tb" id="adminTab" style="display:none" onclick="goTab('admin',this)"><span class="tb-i">🔧</span><span class="tb-l">Admin</span></button>
   </div>
 
@@ -880,8 +880,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="tl-sub" id="tlSub"></div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button class="b-secondary" style="width:auto;padding:10px 16px;border-color:var(--grn);color:var(--grn)" onclick="shareProgressImage()">📲 Share progress image</button>
-      <button class="b-secondary" style="width:auto;padding:10px 16px" onclick="shareBodyChartImage()">📈 Share weight &amp; waist chart</button>
+      <button class="b-secondary" style="width:auto;padding:10px 16px;border-color:var(--grn);color:var(--grn)" onclick="shareBodyChartImage()">📈 Share weight &amp; waist chart</button>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
@@ -924,7 +923,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div id="wktFromProgWrap" style="display:none"></div>
 
     <!-- Training calendar -->
-    <div class="card" id="wktCalCard" style="margin-top:12px;display:none">
+    <div class="card" id="wktCalCard" style="margin-top:12px;display:none!important">
       <div class="card-lbl">Training calendar (this month)</div>
       <div class="wkt-cal" id="wktCalGrid"></div>
     </div>
@@ -950,23 +949,16 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
         <button class="approve-btn" style="padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none" onclick="shareAppLinkWhatsApp()">📲 Share on WhatsApp</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><button class="b-secondary" style="padding:10px 16px;" onclick="exportAllCSV()">⬇️ Download all data (CSV)</button></div>
-    <div class="card" id="commStatsCard">
-      <div class="card-lbl" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin:0" onclick="toggleAdminSection('commStats')">
-        <span>Community Stats</span>
-        <span id="commStatsChev" style="color:var(--grn);font-size:14px">▾</span>
-      </div>
-      <div id="commStatsBody" style="margin-top:12px">
-        <div class="comm-grid" id="commGrid"></div>
-      </div>
+    <div class="card" id="commStatsCard" style="display:none">
+      <div id="commStatsBody"><div class="comm-grid" id="commGrid"></div></div>
     </div>
     <div id="adminRiskPanel"></div>
     <div id="adminBulkBar" style="display:none;margin-bottom:12px"></div>
     <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin-bottom:10px">Member Approvals & Data</div>
     <div id="membersList"></div>
     
-    <!-- Admin: Demos (collapsible) -->
-    <div class="card" style="margin-top:14px;padding:12px 14px">
+    <!-- Admin: Demos (hidden — not needed for core coaching) -->
+    <div class="card" style="margin-top:14px;padding:12px 14px;display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('demos')">
         <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Exercise Demos</div>
         <span id="demosChev" style="color:var(--grn);font-size:14px;font-weight:800">›</span>
@@ -2569,8 +2561,8 @@ function renderExerciseBuilder(){
           <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Saved — tap to undo':'Tap ✓ to save this set'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
         </div>`).join('')}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-        <button class="add-set-btn" onclick="addSet(${ei});startRestTimer(90)">＋ Add Set · Rest 90s</button>
-        <button class="add-set-btn" style="color:var(--gry)" onclick="startRestTimer(90)">⏱ Rest only</button>
+        <button class="add-set-btn" onclick="addSet(${ei});startRestTimer(150)">＋ Add Set · Rest 2:30</button>
+        <button class="add-set-btn" style="color:var(--gry)" onclick="startRestTimer(150)">⏱ Rest 2:30</button>
       </div>
     </div>`;
   }).join('');
@@ -2626,7 +2618,7 @@ function toggleSetDone(ei, si){
       return;
     }
     s.done = true;
-    try{ startRestTimer(90); }catch(e){}
+    try{ startRestTimer(150); }catch(e){}
     renderExerciseBuilder();
     saveWorkoutProgress(true);
   } else {
@@ -2849,7 +2841,7 @@ async function saveWorkout(){
       toast((isUpdate?'✅ Session updated':'✅ Session finished')+(autoTicked?(' · '+autoTicked+' set(s) auto-saved'):''),'g');
     }
     closeWorkoutLogger();
-    renderWorkoutsScreen();
+    try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e){ renderWorkoutsScreen(); }
   }catch(e){
     console.error(e);
     if(!CACHE.workouts)CACHE.workouts={};
@@ -2859,7 +2851,7 @@ async function saveWorkout(){
     else CACHE.workouts[u.email].push(entry);
     toast(offline?'💾 Saved on phone (sync when online)':'⚠️ Saved on this phone — will sync when online','a');
     closeWorkoutLogger();
-    renderWorkoutsScreen();
+    try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e2){ renderWorkoutsScreen(); }
   }finally{
     _savingWorkout=false;
     if(btn){ btn.disabled=false; btn.style.opacity=''; if(prevLabel) btn.textContent=prevLabel; }
@@ -2955,7 +2947,7 @@ function renderWorkoutsScreen(){
 
   // Exercise progression charts + calendar
   renderExerciseProgression(list);
-  renderWorkoutCalendar(list);
+  // calendar removed from UI
 
   const hl=document.getElementById('wktHistList');
   if(!hl)return;
@@ -3404,7 +3396,7 @@ function renderProgramScreen(){
     } else if(st.state==='missing'){
       wrap.innerHTML=`<div class="card wkt-empty">📋 Your assigned program is no longer available. Ask your coach to assign a new one.</div>`;
     } else if(st.state==='none'||!mine){
-      wrap.innerHTML=`<div class="card wkt-empty">📋 No program assigned yet — ask your coach to assign one, or pick from available programs below.<div style="margin-top:12px"><button class="b-secondary" style="width:auto;padding:8px 14px" onclick="openWorkoutLogger({custom:true})">＋ Log a custom session</button></div></div>`;
+      wrap.innerHTML=`<div class="card wkt-empty">📋 No program assigned yet — your coach will set one up.</div>`;
     } else {
       const next = nextProgramSession(u, typeof myWorkouts==='function'?myWorkouts():[]);
       const nextIdx = next ? next.index : 0;
@@ -3762,6 +3754,54 @@ function renderTrend(){
 // ═══════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════
+
+function renderTodayJobs(u, ci){
+  let el = document.getElementById('dashTodayJobs');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'dashTodayJobs';
+    const greet = document.getElementById('dashGreet');
+    if(greet && greet.parentNode) greet.parentNode.insertBefore(el, greet.nextSibling);
+    else {
+      const cont = document.getElementById('dashContent');
+      if(cont) cont.insertBefore(el, cont.firstChild);
+    }
+  }
+  if(!u || VIEWUSER){ el.style.display='none'; el.innerHTML=''; return; }
+  if(u.status && u.status!=='approved'){ el.style.display='none'; return; }
+  const t = today();
+  const row = (ci||[]).find(c=>c && c.date===t);
+  const h = new Date().getHours();
+  const bits = [];
+  const needWt = !row || row.weight==null || row.weight==='';
+  const needWa = !row || row.waist==null || row.waist==='';
+  const needSt = !row || !(row.steps>0);
+  const needW = !row || !(typeof waterToMl==='function' ? waterToMl(row.water||0)>0 : row.water);
+  const needSl = !row || row.sleep==null || row.sleep==='';
+  if(h < 12){
+    if(needWt || needWa) bits.push('Morning: log weight & waist');
+    else bits.push('Morning log done');
+  } else if(h < 18){
+    if(needWt || needWa) bits.push('Still need weight & waist');
+    if(needSt || needW) bits.push('Later: steps & water');
+    if(!bits.length) bits.push('On track so far today');
+  } else {
+    const miss = [];
+    if(needWt || needWa) miss.push('weight/waist');
+    if(needSt) miss.push('steps');
+    if(needW) miss.push('water');
+    if(needSl) miss.push('sleep');
+    if(miss.length) bits.push('Tonight: log '+miss.join(', '));
+    else bits.push('Today fully logged');
+  }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.3)">
+    <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Today</div>
+    <div style="font-size:14px;font-weight:700;color:var(--wht)">${escHtml(bits.join(' · '))}</div>
+    ${(needWt||needWa||needSt||needW||needSl)?`<button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>`:''}
+  </div>`;
+}
+
 function renderDash(){
   if(!CU)return;
   const u=VIEWUSER||CU;
@@ -3789,6 +3829,9 @@ function renderDash(){
 
   const ci=myCI();
   const wkts=myWorkouts();
+  try{ renderTodayJobs(u, ci); }catch(e){}
+  try{ renderRemindPrompt(u); }catch(e){}
+  try{ renderClientAlerts(u, ci); }catch(e){}
 
   // ── Onboarding checklist (first ~2 weeks / sparse data) ──
   const ob=document.getElementById('onboardWrap');
@@ -3935,8 +3978,7 @@ function renderDash(){
   }
   if(qa&&!VIEWUSER){
     qa.innerHTML=`
-      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="messageCoach('Hi coach, quick question from Shredlane')">💬 Message coach</button>
-      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="shareProgressImage()">📲 Share progress</button>`;
+      <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px" onclick="messageCoach('Hi coach, quick question from Shredlane')">💬 Message coach</button>`;
   } else if(qa&&VIEWUSER){qa.innerHTML='';}
   if(!ci.length){renderSpeedo(0);renderTrend();const pc0=document.getElementById('progCard');if(pc0)pc0.style.display='none';return;}
   const last=ci[ci.length-1],prev=ci.length>1?ci[ci.length-2]:null;
@@ -4334,7 +4376,14 @@ const renderAdmin = requireAdmin(function renderAdmin(){
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
         <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
-        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills counts, wins above 85%, what is leading, and what is dragging. Optional note overrides the auto FOCUS NEXT WEEK. Add MyNetDiary numbers for a fuller picture.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills counts and focus. Pick a template or write your own note. Add MyNetDiary numbers when you have them.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','strong')">Strong week</button>
+          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','water')">Focus water</button>
+          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','steps')">Focus steps</button>
+          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','train')">Focus training</button>
+          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','photos')">Photos due</button>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
             <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
@@ -4348,8 +4397,8 @@ const renderAdmin = requireAdmin(function renderAdmin(){
               <option value="On track">On track</option>
               <option value="">— skip —</option>
             </select></div>
-          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Extra note (optional)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="e.g. Great consistency on water this week"></div>
+          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Extra note / FOCUS NEXT WEEK</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="or tap a template above"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="approve-btn" style="padding:8px 12px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="previewWeeklyClientMessage('${u.email}')">👁 Preview</button>
@@ -4393,7 +4442,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
 
   // Archived (collapsed by default)
   const archivedF=archived.filter(matchQ);
-  const arOpen=isAdminSectionOpen('archived', false);
+  const arOpen=isAdminSectionOpen('archived', true);
   html+=`<div class="card" style="margin-top:16px;padding:12px 14px">
     <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('archived')">
       <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gry)">📦 Archived (${archivedF.length})</div>
@@ -5019,7 +5068,7 @@ function extendRestTimer(secs){
   toast('+'+secs+'s rest','g');
 }
 function startRestTimer(secs){
-  secs=secs||90;
+  secs=secs||150;
   _restLeft=secs;
   const box=document.getElementById('restTimer');
   const disp=document.getElementById('restTimerDisplay');
@@ -5216,6 +5265,25 @@ function openWhatsAppTo(phone, body){
   const url = digits ? ('https://wa.me/'+digits+'?text='+msg) : ('https://wa.me/?text='+msg);
   const w = window.open(url, '_blank');
   return !!w;
+}
+
+
+function applyWeeklyTemplate(email, key){
+  const id = _weeklyMsgDomId(email);
+  const note = document.getElementById('wkNote-'+id);
+  const guar = document.getElementById('wkGuar-'+id);
+  if(!note) return;
+  const map = {
+    strong: 'Great consistency this week. Keep the same standard next week.',
+    water: 'Main focus next week: hit your water target at least 5 days.',
+    steps: 'Main focus next week: hit your step target at least 5 days.',
+    train: 'Main focus next week: complete all planned training sessions.',
+    photos: 'Upload progress photos this week (every 2 weeks keeps adherence on track).'
+  };
+  note.value = map[key] || '';
+  if(guar && key==='strong') guar.value = 'On track';
+  toast('Template applied — preview or send','g');
+  try{ previewWeeklyClientMessage(email); }catch(e){}
 }
 
 function _weeklyMsgDomId(email){
