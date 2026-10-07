@@ -2211,111 +2211,12 @@ function renderGoalProgress(u, ci){
 }
 
 function renderAdminRiskAndBulk(){
-  if(!CU || CU.role!=='admin') return;
+  // Daily coach lists removed — feedback is weekly via message + MyNetDiary day-to-day.
+  // Clients still get automatic phone notifications (6:30am / 9:00pm) when enabled.
   const panel = document.getElementById('adminRiskPanel');
   const bulk = document.getElementById('adminBulkBar');
-  const d = gDB();
-  const approved = Object.values(d.users||{}).filter(u=>u.role!=='admin' && u.status==='approved');
-  const risks = [];
-  function ciForUser(u){
-    const keys = [u.email, (u.email||'').toLowerCase(), u.id].filter(Boolean);
-    for(const k of keys){
-      if(Array.isArray(d.checkins[k])) return d.checkins[k];
-    }
-    // fallback: match any checkins doc id to email field
-    const hit = Object.entries(d.checkins||{}).find(([id,list])=>{
-      return (id||'').toLowerCase()===(u.email||'').toLowerCase() && Array.isArray(list);
-    });
-    return hit ? hit[1] : [];
-  }
-  approved.forEach(u=>{
-    const ci = ciForUser(u);
-    const last = lastCheckinDate(ci);
-    const gap = daysSinceDate(last);
-    const adh = adherencePct(u,14);
-    const reasons = [];
-    // 2+ days without a check-in (or never) → needs attention
-    if(!last || gap>=2) reasons.push(!last?'no check-ins yet':`no check-in ${gap}d`);
-    if(adh < 50 && ci.length>=3) reasons.push(`low adherence ${adh}%`);
-    if(ci.length>=2){
-      const sorted=[...ci].sort((a,b)=>a.date.localeCompare(b.date));
-      const a=sorted[sorted.length-1], b=sorted[Math.max(0,sorted.length-4)];
-      if(a&&b&&a.weight!=null&&b.weight!=null && (a.weight-b.weight)>=1.5) reasons.push(`weight +${(a.weight-b.weight).toFixed(1)}kg`);
-    }
-    if(reasons.length) risks.push({u, reasons, gap: gap==null?999:gap, adh});
-  });
-  risks.sort((a,b)=>b.gap-a.gap);
-  // Who hasn't logged a check-in today
-  const tday = today();
-  const notToday = approved.filter(u=>{
-    const ci = Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
-    return !ci.some(c=>c && c.date===tday);
-  }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-
-  // Sunday photo compliance: last 7 days including most recent Sunday
-  function mostRecentSunday(){
-    const x=new Date(); const day=x.getDay(); // 0 Sun
-    x.setDate(x.getDate()-day);
-    return x.toISOString().slice(0,10);
-  }
-  const sun = mostRecentSunday();
-  const photoMiss = approved.filter(u=>{
-    const raw = d.photos[u.email];
-    const list = Array.isArray(raw)?raw:[];
-    return !list.some(e=>e && e.date >= sun);
-  }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-
-  if(panel){
-    const nlOpen = isAdminSectionOpen('notLogged', true);
-    const naOpen = isAdminSectionOpen('needsAtt', true); // always show by default (not night-only)
-    let html = '';
-    // Info-only lists (no manual Remind / nudge actions — use Weekly update message)
-    html += `<div class="risk-panel" style="border-color:rgba(255,184,0,.4);margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('notLogged')">
-        <h4 style="color:var(--amb);margin:0">Not checked in today (${notToday.length})</h4>
-        <span id="notLoggedChev" style="color:var(--grn);font-weight:800">${nlOpen?'▾':'›'}</span>
-      </div>
-      <div id="notLoggedBody" style="display:${nlOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">For your awareness. Send feedback with Weekly update message, not daily pings.</div>
-        ${notToday.length? notToday.map(u=>`
-          <div class="risk-item"><strong>${escHtml(u.name)}</strong>
-            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${u.email}')">View</button>
-          </div>`).join('') : '<div class="risk-item">Everyone has checked in today ✅</div>'}
-      </div>
-    </div>`;
-    const phOpen = isAdminSectionOpen('photoMiss', false);
-    html += `<div class="risk-panel" style="border-color:rgba(255,214,0,.35);margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('photoMiss')">
-        <h4 style="color:var(--grn);margin:0">Photos due (since Sun) (${photoMiss.length})</h4>
-        <span id="photoMissChev" style="color:var(--grn);font-weight:800">${phOpen?'▾':'›'}</span>
-      </div>
-      <div id="photoMissBody" style="display:${phOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No progress photo since ${sun}.</div>
-        ${photoMiss.length? photoMiss.slice(0,15).map(u=>`
-          <div class="risk-item"><strong>${escHtml(u.name)}</strong>
-            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="event.stopPropagation();viewMemberPhotos('${u.email}')">Photos</button>
-          </div>`).join('') : '<div class="risk-item">All approved clients have a photo this week ✅</div>'}
-      </div>
-    </div>`;
-    html += `<div class="risk-panel" style="border-color:${risks.length?'rgba(255,59,48,.35)':'rgba(255,214,0,.3)'};margin-bottom:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('needsAtt')">
-        <h4 style="color:${risks.length?'var(--red)':'var(--grn)'};margin:0">Needs attention (${risks.length})</h4>
-        <span id="needsAttChev" style="color:var(--grn);font-weight:800">${naOpen?'▾':'›'}</span>
-      </div>
-      <div id="needsAttBody" style="display:${naOpen?'block':'none'};margin-top:8px">
-        <div style="font-size:11px;color:var(--gry);margin-bottom:6px">No check-in 2+ days, low adherence, or weight up ~1.5kg. Open Weekly update to message them.</div>
-        ${risks.length? risks.slice(0,12).map(r=>`
-          <div class="risk-item"><strong>${escHtml(r.u.name)}</strong> — ${escHtml(r.reasons.join(' · '))}
-            <button class="approve-btn" style="margin-left:8px;padding:4px 8px;font-size:10px" onclick="viewMember('${r.u.email}')">View</button>
-          </div>`).join('') : '<div class="risk-item">All clear right now.</div>'}
-      </div>
-    </div>`;
-    panel.innerHTML = html;
-  }
-  if(bulk){
-    bulk.style.display='none';
-    bulk.innerHTML = '';
-  }
+  if(panel){ panel.innerHTML = ''; }
+  if(bulk){ bulk.style.display = 'none'; bulk.innerHTML = ''; }
 }
 
 
