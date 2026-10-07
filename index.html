@@ -725,7 +725,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
       <div class="str-card">
         <div class="str-f">🔥</div>
-        <div><div class="str-n" id="strN">0</div><div class="str-l">Day streak</div></div>
+        <div><div class="str-n" id="strN">0/7</div><div class="str-l">Days logged this week</div></div>
         <div class="str-r"><div class="str-tot" id="totCI">0</div><div class="str-tl">Total check-ins</div></div>
       </div>
 
@@ -2654,12 +2654,21 @@ async function saveWorkout(){
     // PR detection vs history before this save
     const prior = (list||[]).filter(w=>w && w.id!==entry.id);
     const prs = detectPRs(entry, prior);
-    if(offline) toast('💾 OFFLINE — workout saved on this phone. Will sync when you are back online.','a');
+    let celeb = '';
+    try{
+      if(!isUpdate && wktBuilder.programDayId){
+        const nxt = nextProgramSession(u, list);
+        const doneName = (entry.title||'').split('—').pop().trim() || 'Session';
+        const nextName = nxt && nxt.day ? (nxt.day.name||('Day '+(nxt.index+1))) : '';
+        celeb = doneName+' done'+(nextName?(' · next is '+nextName):'');
+      }
+    }catch(e){}
+    if(offline) toast('💾 OFFLINE — saved on phone'+(celeb?(' · '+celeb):''),'a');
     else if(prs.length){
       const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
-      toast((isUpdate?'✅ Updated · ':'✅ Saved · ')+msg, 'g');
+      toast((celeb?(celeb+' · '):'')+msg, 'g');
     } else {
-      toast((isUpdate?'✅ Session updated':'✅ Session finished')+(autoTicked?(' · '+autoTicked+' set(s) auto-saved'):''),'g');
+      toast((celeb||(isUpdate?'Session updated':'Session finished'))+(autoTicked?(' · '+autoTicked+' set(s) auto-saved'):''),'g');
     }
     closeWorkoutLogger();
     try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e){ renderWorkoutsScreen(); }
@@ -3598,11 +3607,18 @@ function renderTodayJobs(u, ci){
     if(miss.length) bits.push('Tonight: log '+miss.join(', '));
     else bits.push('Today fully logged');
   }
+  const allDone = !(needWt||needWa||needSt||needW||needSl);
+  // Quiet mode: fully logged → hide the jobs card (win line still shows)
+  if(allDone){
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
   el.style.display = 'block';
   el.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.3)">
     <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Today</div>
     <div style="font-size:14px;font-weight:700;color:var(--wht)">${escHtml(bits.join(' · '))}</div>
-    ${(needWt||needWa||needSt||needW||needSl)?`<button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>`:''}
+    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>
   </div>`;
 }
 
@@ -3732,20 +3748,19 @@ function renderDash(){
   }
 
   document.getElementById('totCI').textContent=ci.length;
-  const ciStreak=calcStreak(ci);
+  // This week: days with a check-in (Mon–Sun style last 7 days including today)
+  const weekStart = (typeof weekWindowStart==='function') ? weekWindowStart() : (function(){
+    const x=new Date(); x.setDate(x.getDate()-6); return x.toISOString().slice(0,10);
+  })();
+  const daysThisWeek = new Set((ci||[]).filter(c=>c&&c.date>=weekStart).map(c=>c.date)).size;
   const wStreak=typeof calcWorkoutStreak==='function'?calcWorkoutStreak(wkts):0;
   const strCard=document.querySelector('.str-card');
   const strN=document.getElementById('strN');
   const strL=document.querySelector('.str-l');
-  // Real streak only: show when 3+ days, otherwise hide the celebration card
   if(strCard){
-    if(ciStreak>=3){
-      strCard.style.display='flex';
-      if(strN) strN.textContent=ciStreak;
-      if(strL) strL.textContent=wStreak?('Day streak · '+wStreak+'d train'):'Day streak';
-    } else {
-      strCard.style.display='none';
-    }
+    strCard.style.display='flex';
+    if(strN) strN.textContent=daysThisWeek+'/7';
+    if(strL) strL.textContent=wStreak?('Days logged this week · '+wStreak+'d train'):'Days logged this week';
   }
   // Short win line (body progress)
   try{
@@ -4116,11 +4131,27 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         const days=Math.floor((new Date(today()+'T00:00:00')-new Date(meta.lastAct+'T00:00:00'))/86400000);
         ago=days<=0?'today':(days===1?'1d ago':days+'d ago');
       }
-      const tip=isPend?'Pending approval':(ago+' · '+meta.ci.length+' CI · '+meta.adh+'% adh'+(u.phone?' · 📱':''));
+      const guar = u.guaranteeStatus || '';
+      const guarBadge = guar==='VOID, reset needed'||guar==='VOID'
+        ? ' <span class="inactive-badge" style="background:rgba(255,59,48,.2);color:var(--red)">VOID</span>'
+        : (guar==='At risk'||guar==='Paused'
+          ? ' <span class="inactive-badge" style="background:rgba(255,184,0,.2);color:var(--amb)">'+escHtml(guar)+'</span>'
+          : (guar==='Active'||guar==='On track'
+            ? ' <span class="inactive-badge" style="background:rgba(126,224,0,.15);color:var(--grn)">'+escHtml(guar)+'</span>'
+            : ''));
+      const prog = (u.programId && CACHE.programs && CACHE.programs[u.programId]) ? CACHE.programs[u.programId] : null;
+      const progBit = prog ? (prog.name+(u.programStartDate?(' · started '+u.programStartDate):'')) : 'No program';
+      const lastWk = u.lastWeeklyMessageAt ? (function(ts){
+        const d=Math.floor((Date.now()-ts)/86400000);
+        if(d<=0) return 'weekly msg today';
+        if(d===1) return 'weekly msg yesterday';
+        return 'weekly msg '+d+'d ago';
+      })(u.lastWeeklyMessageAt) : 'no weekly msg yet';
+      const tip=isPend?'Pending approval':(ago+' · '+meta.ci.length+' CI · '+meta.adh+'% · '+progBit+' · '+lastWk);
       return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
         <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
-        <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}</div>
-        <div class="mrow-meta">${escHtml(u.email)} · ${tip}</div></div>
+        <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}${guarBadge}</div>
+        <div class="mrow-meta">${escHtml(u.email)} · ${escHtml(tip)}</div></div>
         <span class="bdg ${isPend?'bdg-pend':meta.ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':meta.ci.length?'Active':'Approved'}</span>
         <span class="mrow-chev">${open?'▾':'›'}</span>
       </div>${open?memberDetail(u,i):''}`;
@@ -4141,6 +4172,19 @@ const renderAdmin = requireAdmin(function renderAdmin(){
       ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program</span>
         <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)"><option value="">— None —</option>${progOptions}</select>
+        ${u.programStartDate?`<span style="font-size:11px;color:var(--gry)">Started ${escHtml(u.programStartDate)}</span>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--gry);font-weight:600">🛡 Guarantee</span>
+        <select class="prog-select-sm" id="guarFlag-${id}" onchange="saveGuaranteeStatus('${u.email}',this.value)">
+          <option value="" ${!(u.guaranteeStatus)?'selected':''}>— Not set —</option>
+          <option value="Active" ${u.guaranteeStatus==='Active'?'selected':''}>Active</option>
+          <option value="On track" ${u.guaranteeStatus==='On track'?'selected':''}>On track</option>
+          <option value="At risk" ${u.guaranteeStatus==='At risk'?'selected':''}>At risk</option>
+          <option value="Paused" ${u.guaranteeStatus==='Paused'?'selected':''}>Paused</option>
+          <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID, reset needed</option>
+        </select>
+        ${u.lastWeeklyMessageAt?`<span style="font-size:11px;color:var(--gry)">Last weekly: ${new Date(u.lastWeeklyMessageAt).toLocaleDateString()}</span>`:'<span style="font-size:11px;color:var(--amb)">No weekly message sent yet</span>'}
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
         <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}">${escHtml(u.coachNote||'')}</textarea>
@@ -4176,11 +4220,12 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
           <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Guarantee status</div>
             <select class="fi" style="font-size:12px;padding:8px" id="wkGuar-${id}">
-              <option value="Active">Active</option>
-              <option value="Paused">Paused</option>
-              <option value="VOID, reset needed">VOID, reset needed</option>
-              <option value="On track">On track</option>
-              <option value="">— skip —</option>
+              <option value="Active" ${u.guaranteeStatus==='Active'?'selected':''}>Active</option>
+              <option value="On track" ${u.guaranteeStatus==='On track'?'selected':''}>On track</option>
+              <option value="At risk" ${u.guaranteeStatus==='At risk'?'selected':''}>At risk</option>
+              <option value="Paused" ${u.guaranteeStatus==='Paused'?'selected':''}>Paused</option>
+              <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID, reset needed</option>
+              <option value="" ${!u.guaranteeStatus?'selected':''}>— skip —</option>
             </select></div>
           <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Your extra feedback (optional)</div>
             <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="optional — app already sets focus"></div>
@@ -4215,6 +4260,28 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   let html='';
   const progMount=document.getElementById('adminProgramsMount');
   if(progMount) progMount.innerHTML=renderProgramsAdminSection();
+
+  // Weekly message queue: approved clients with check-in data in last 7 days, not messaged in last 5 days
+  const weekAgoStr=(function(){const x=new Date();x.setDate(x.getDate()-7);return x.toISOString().slice(0,10);})();
+  const fiveDaysMs = 5*86400000;
+  const weeklyQueue = approved.filter(u=>{
+    const ci = Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
+    const hasWeek = ci.some(c=>c&&c.date>=weekAgoStr);
+    if(!hasWeek) return false;
+    if(u.lastWeeklyMessageAt && (Date.now()-u.lastWeeklyMessageAt)<fiveDaysMs) return false;
+    return true;
+  }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(weeklyQueue.length){
+    html+=`<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:rgba(255,214,0,.4)">
+      <div style="font-size:11px;font-weight:800;color:var(--grn);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">📨 Weekly message queue (${weeklyQueue.length})</div>
+      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Approved clients with data this week who have not had a weekly message in 5+ days. Tap to open.</div>
+      ${weeklyQueue.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #222">
+        <div style="font-size:13px;font-weight:700;color:var(--wht)">${escHtml(u.name)}</div>
+        <button class="approve-btn" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();openWeeklyQueueClient('${u.email}')">Open</button>
+      </div>`).join('')}
+    </div>`;
+  }
+
   html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search clients by name or email…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
   const q=(window._adminMemberQ||'').toLowerCase().trim();
   function matchQ(u){ if(!q) return true; return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q); }
@@ -4894,6 +4961,41 @@ function copyWeeklyClientMessage(email){
   const pre = document.getElementById('wkPreview-'+id);
   if(pre){ pre.style.display='block'; pre.textContent=body; }
 }
+
+async function saveGuaranteeStatus(email, status){
+  if(!CU||CU.role!=='admin')return;
+  email=String(email||'').trim().toLowerCase();
+  try{
+    await fdb.collection('users').doc(email).set({guaranteeStatus: status||null},{merge:true});
+    if(CACHE.users[email]) CACHE.users[email].guaranteeStatus = status||null;
+    // sync duplicate docs by email
+    Object.entries(CACHE.users||{}).forEach(([id,u])=>{
+      if(String((u&&u.email)||id).toLowerCase()===email) CACHE.users[id].guaranteeStatus = status||null;
+    });
+    toast(status?'Guarantee: '+status:'Guarantee cleared','g');
+    try{ renderAdmin(); }catch(e){}
+  }catch(e){ console.error(e); toast('Could not save guarantee','r'); }
+}
+async function markWeeklyMessageSent(email){
+  email=String(email||'').trim().toLowerCase();
+  const ts=Date.now();
+  try{
+    await fdb.collection('users').doc(email).set({lastWeeklyMessageAt: ts},{merge:true});
+    if(CACHE.users[email]) CACHE.users[email].lastWeeklyMessageAt = ts;
+    Object.entries(CACHE.users||{}).forEach(([id,u])=>{
+      if(String((u&&u.email)||id).toLowerCase()===email) CACHE.users[id].lastWeeklyMessageAt = ts;
+    });
+  }catch(e){ console.warn('lastWeeklyMessageAt', e); }
+}
+function openWeeklyQueueClient(email){
+  window._adminOpenEmail = String(email||'').toLowerCase();
+  try{ renderAdmin(); }catch(e){}
+  setTimeout(function(){
+    const el=document.getElementById('adminMemberDetail');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  }, 80);
+}
+
 function sendWeeklyClientMessage(email){
   email = String(email||'').trim().toLowerCase();
   const body = buildWeeklyClientMessage(email);
@@ -4903,6 +5005,7 @@ function sendWeeklyClientMessage(email){
   const pre = document.getElementById('wkPreview-'+id);
   if(pre){ pre.style.display='block'; pre.textContent=body; }
   const ok = openWhatsAppTo(u.phone, body);
+  try{ markWeeklyMessageSent(email); }catch(e){}
   if(!ok) toast('Message copied — allow pop-ups or paste into WhatsApp','a');
   else toast(u.phone ? 'WhatsApp opened with weekly update' : 'WhatsApp opened — pick the client (no phone on file)','g');
 }
@@ -5055,9 +5158,13 @@ function renderPhotoCompare(){
   if(!card||!beforeSel||!afterSel||!view)return;
   if(list.length<2){card.style.display='none';return;}
   card.style.display='block';
-  if(!beforeSel.options.length||beforeSel.dataset.filled!==String(list.length)){
-    beforeSel.innerHTML=list.map(e=>`<option value="${e.date}">${e.date}</option>`).join('');
-    afterSel.innerHTML=list.map(e=>`<option value="${e.date}">${e.date}</option>`).join('');
+  // Always refresh options; default oldest vs newest
+  beforeSel.innerHTML=list.map(e=>`<option value="${e.date}">${e.date}</option>`).join('');
+  afterSel.innerHTML=list.map(e=>`<option value="${e.date}">${e.date}</option>`).join('');
+  if(!beforeSel.value || !list.some(e=>e.date===beforeSel.value)) beforeSel.value=list[0].date;
+  if(!afterSel.value || !list.some(e=>e.date===afterSel.value)) afterSel.value=list[list.length-1].date;
+  // First open of this set length → force oldest / newest
+  if(beforeSel.dataset.filled!==String(list.length)){
     beforeSel.value=list[0].date;
     afterSel.value=list[list.length-1].date;
     beforeSel.dataset.filled=String(list.length);
