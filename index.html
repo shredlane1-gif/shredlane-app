@@ -675,7 +675,6 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <button class="tb" id="tbHistory" onclick="goTab('history',this)"><span class="tb-i">📅</span><span class="tb-l">History</span></button>
     <button class="tb" id="tbWorkouts" onclick="goTab('workouts',this)"><span class="tb-i">🏋️</span><span class="tb-l">Train</span></button>
     <button class="tb" id="photosTab" onclick="goTab('photos',this)"><span class="tb-i">📸</span><span class="tb-l">Photos</span></button>
-    <button class="tb" id="libraryTab" onclick="goTab('library',this)" style="display:none"><span class="tb-i">🎬</span><span class="tb-l">Library</span></button>
     <button class="tb" id="adminTab" style="display:none" onclick="goTab('admin',this)"><span class="tb-i">🔧</span><span class="tb-l">Admin</span></button>
   </div>
 
@@ -922,12 +921,6 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     </div>
     <div id="wktFromProgWrap" style="display:none"></div>
 
-    <!-- Training calendar -->
-    <div class="card" id="wktCalCard" style="margin-top:12px;display:none!important">
-      <div class="card-lbl">Training calendar (this month)</div>
-      <div class="wkt-cal" id="wktCalGrid"></div>
-    </div>
-
     <!-- Exercise progression charts -->
     <div id="exProgWrap" style="margin-top:16px"></div>
 
@@ -949,50 +942,11 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
         <button class="approve-btn" style="padding:8px 14px;font-size:12px;background:var(--grn);color:#000;border:none" onclick="shareAppLinkWhatsApp()">📲 Share on WhatsApp</button>
       </div>
     </div>
-    <div class="card" id="commStatsCard" style="display:none">
-      <div id="commStatsBody"><div class="comm-grid" id="commGrid"></div></div>
     </div>
     <div id="adminRiskPanel"></div>
     <div id="adminBulkBar" style="display:none;margin-bottom:12px"></div>
     <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--gry);margin-bottom:10px">Member Approvals & Data</div>
     <div id="membersList"></div>
-    
-    <!-- Admin: Demos (hidden — not needed for core coaching) -->
-    <div class="card" style="margin-top:14px;padding:12px 14px;display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('demos')">
-        <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--wht)">Exercise Demos</div>
-        <span id="demosChev" style="color:var(--grn);font-size:14px;font-weight:800">›</span>
-      </div>
-      <div id="demosBody" style="display:none;margin-top:12px">
-        <div class="card-lbl">Upload New Demo</div>
-        <div class="field" style="margin-top:10px;">
-          <label>Exercise Name</label>
-          <input type="text" id="demoName" class="fi" placeholder="e.g. Barbell Squat">
-        </div>
-        <div class="field">
-          <label>Muscle Group</label>
-          <select id="demoGroup" class="fi fi-sel">
-            <option value="">Select group…</option>
-            <option value="Legs">Legs</option>
-            <option value="Back">Back</option>
-            <option value="Chest">Chest</option>
-            <option value="Shoulders">Shoulders</option>
-            <option value="Arms">Arms</option>
-            <option value="Core">Core</option>
-            <option value="Full Body">Full Body</option>
-            <option value="Cardio">Cardio</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Video File (MP4, max 50MB)</label>
-          <input type="file" id="demoFile" accept="video/mp4,video/*" onchange="onDemoFile(this)" style="display:none;">
-          <button class="b-secondary" style="width:100%;" onclick="document.getElementById('demoFile').click()">🎬 Choose Video</button>
-          <div id="demoFileName" style="font-size:12px;color:var(--gry);margin-top:6px;"></div>
-        </div>
-        <button class="b-grn" style="width:100%;margin-top:6px;" onclick="saveDemo()">Upload Demo</button>
-        <div id="adminDemoList" style="margin-top:12px"></div>
-      </div>
-    </div>
 
     <!-- Admin: Member Photos (collapsible) -->
     <div class="card" style="margin-top:12px;padding:12px 14px">
@@ -1073,11 +1027,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 <!-- ═══════════════════════════════════════
      LIBRARY  (Exercise Demos)
      ═══════════════════════════════════════ -->
-<div class="scr" id="scr-library">
-  <div class="scr-ttl">EXERCISE LIBRARY</div>
-  <div class="scr-sub">Demo videos by muscle group</div>
-  <div id="libraryGrid"></div>
-</div>
+
 </div>
 
 <div id="toast"></div>
@@ -1277,7 +1227,6 @@ function onDataUpdate(){
   if(activeScr.id==='scr-history') renderHistory();
   if(activeScr.id==='scr-workouts'){renderProgramScreen();renderWorkoutsScreen();}
   if(activeScr.id==='scr-photos') renderPhotos();
-  if(activeScr.id==='scr-library') renderLibrary();
 }
 
 // ═══════════════════════════════════════
@@ -1563,7 +1512,6 @@ function goTab(name,btn){
     }
   }
     if(name==='photos') renderPhotos();
-  if(name==='library') renderLibrary();
   try{ updateCoachBar(); }catch(e){}
 }
 
@@ -1586,7 +1534,7 @@ function goToWorkoutsFromCI(){
 
 function viewMember(email){viewMemberAs(email,'dashboard');}
 
-const TAB_BTN_IDS={dashboard:'tbDashboard',checkin:'tbCheckin',history:'tbHistory',workouts:'tbWorkouts',program:'tbWorkouts',photos:'photosTab',library:'libraryTab',admin:'adminTab'};
+const TAB_BTN_IDS={dashboard:'tbDashboard',checkin:'tbCheckin',history:'tbHistory',workouts:'tbWorkouts',program:'tbWorkouts',photos:'photosTab',admin:'adminTab'};
 function viewMemberAs(email,tab){
   if(!CU||CU.role!=='admin')return;
   const u=gDB().users[email];
@@ -2369,28 +2317,6 @@ function renderAdminRiskAndBulk(){
     bulk.innerHTML = '';
   }
 }
-function bulkMessageClients(){
-
-  const text = (document.getElementById('bulkMsgText')||{}).value || 'Reminder from Shredlane';
-  const approved = Object.values(gDB().users||{}).filter(u=>u.role!=='admin'&&u.status==='approved');
-  if(!approved.length){ toast('No approved clients','a'); return; }
-  // Without phone numbers we copy message and open generic wa share for coach to pick recipients
-  const msg = encodeURIComponent(text);
-  try{
-    navigator.clipboard.writeText(text);
-  }catch(e){}
-  window.open('https://wa.me/?text='+msg, '_blank');
-  toast('Message copied — WhatsApp opened. Paste/send to your client list.','g');
-}
-function coachBackupReminder(force){ /* disabled — no manual tips */ }
-function exportUserWeekPDF(email){
-  // Prefer existing exportUserPDF if present
-  if(typeof exportUserPDF === 'function'){
-    exportUserPDF(email);
-    return;
-  }
-  toast('PDF export unavailable','r');
-}
 
 
 async function saveCI(){
@@ -2680,8 +2606,6 @@ async function saveWorkoutProgress(quiet){
     if(quiet) toast('✓ Saved on phone','a');
   }
 }
-
-
 
 
 // ── Personal records (weight + reps / estimated 1RM) ──
@@ -3434,23 +3358,6 @@ function renderProgramScreen(){
   }
 }
 
-function playDemoVideo(id){
-  const demo=CACHE.demos[id];
-  if(!demo||!(demo.videoUrl||demo.url)){toast('Demo not found','r');return;}
-  let ov=document.getElementById('demoOverlay');
-  if(!ov){
-    ov=document.createElement('div');
-    ov.id='demoOverlay';
-    ov.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.92);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:16px;';
-    ov.innerHTML=`<div style="width:100%;max-width:480px;background:var(--dark);border:1px solid var(--bdr2);border-radius:16px;padding:16px;position:relative;"><button onclick="closeDemoVideo()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--gry);font-size:20px;cursor:pointer;z-index:2;">✕</button><div id="demoOverlayTitle" style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;font-style:italic;color:var(--wht);margin-bottom:10px;padding-right:30px;"></div><video id="demoOverlayVideo" controls preload="metadata" style="width:100%;border-radius:10px;display:block;max-height:60vh;background:#000;"></video></div>`;
-    document.body.appendChild(ov);
-  }
-  document.getElementById('demoOverlayTitle').textContent=demo.name;
-  const vid=document.getElementById('demoOverlayVideo');
-  vid.src=demo.videoUrl||demo.url;
-  vid.load();
-  ov.style.display='flex';
-}
 function closeDemoVideo(){
   const ov=document.getElementById('demoOverlay');
   if(ov){const vid=document.getElementById('demoOverlayVideo');if(vid){vid.pause();vid.src='';}ov.style.display='none';}
@@ -4187,7 +4094,6 @@ function toggleAdminSection(key){
   try{ localStorage.setItem('sl_admin_sec_'+key, open?'1':'0'); }catch(e){}
   applyAdminSection(key, open);
   if(key==='programs'){ try{ renderAdmin(); }catch(e){} }
-  if(key==='demos' && open){ try{ renderAdminDemos(); }catch(e){} }
   if(key==='photos' && open){ try{ renderAdminMemberPhotos(); }catch(e){} }
 }
 function applyAdminSection(key, open){
@@ -4228,20 +4134,6 @@ async function saveClientPhone(email){
     if(CACHE.users[email]) CACHE.users[email].phone=phone||null;
     toast(phone?'📱 Phone saved':'Phone cleared','g');
   }catch(e){console.error(e);toast('Could not save phone','r');}
-}
-function exportUserWeekCSV(email){
-  const u=gDB().users[email]; if(!u){toast('User not found','r');return;}
-  const start=new Date(); start.setDate(start.getDate()-6);
-  const startStr=start.toISOString().slice(0,10);
-  const ci=(Array.isArray(gDB().checkins[email])?gDB().checkins[email]:[]).filter(c=>c&&c.date>=startStr).sort((a,b)=>a.date.localeCompare(b.date));
-  const rows=[['Date','Weight','Waist','Steps','Sleep','Hunger','Water (ml)','Protein %','Workout','Notes']];
-  ci.forEach(c=>rows.push([c.date,c.weight,c.waist,c.steps,c.sleep,c.hunger,(typeof waterToMl==='function'?waterToMl(c.water||0):c.water),c.protein,c.workout?'yes':'no',c.notes||'']));
-  const csv=rows.map(r=>r.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=(u.name||'client').replace(/\s+/g,'_')+'_week_'+today()+'.csv';
-  a.click();
-  toast('Week CSV downloaded','g');
 }
 
 const renderAdmin = requireAdmin(function renderAdmin(){
@@ -4376,7 +4268,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
         <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
-        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App fills counts and focus. Pick a template or write your own note. Add MyNetDiary numbers when you have them.</div>
+        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App picks the main focus from the data automatically. Your note is optional extra feedback (does not replace the app focus). Add MyNetDiary numbers when you have them.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
           <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','strong')">Strong week</button>
           <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','water')">Focus water</button>
@@ -4397,14 +4289,15 @@ const renderAdmin = requireAdmin(function renderAdmin(){
               <option value="On track">On track</option>
               <option value="">— skip —</option>
             </select></div>
-          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Extra note / FOCUS NEXT WEEK</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="or tap a template above"></div>
+          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Your extra feedback (optional)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="optional — app already sets focus"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="approve-btn" style="padding:8px 12px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="previewWeeklyClientMessage('${u.email}')">👁 Preview</button>
           <button class="approve-btn" style="padding:8px 12px;font-size:11px;background:var(--grn);color:#000;border:none" onclick="sendWeeklyClientMessage('${u.email}')">📲 Send WhatsApp</button>
           <button class="approve-btn" style="padding:8px 12px;font-size:11px" onclick="copyWeeklyClientMessage('${u.email}')">📋 Copy only</button>
         </div>
+        <div id="wkAutoFocus-${id}" style="margin-top:8px;font-size:11px;color:var(--gry);line-height:1.4"></div>
         <pre id="wkPreview-${id}" style="display:none;margin:10px 0 0;padding:10px;background:#000;border-radius:8px;font-size:11px;color:var(--txt);white-space:pre-wrap;font-family:Barlow,sans-serif;line-height:1.45"></pre>
       </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -4467,7 +4360,6 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     const dOpen=isAdminSectionOpen('demos',false); const pOpen=isAdminSectionOpen('photos',false);
     applyAdminSection('demos',dOpen); applyAdminSection('photos',pOpen);
     applyAdminSection('archived', isAdminSectionOpen('archived', false));
-    if(dOpen && typeof renderAdminDemos==='function') renderAdminDemos();
     if(pOpen && typeof renderAdminMemberPhotos==='function') renderAdminMemberPhotos();
   }catch(e){}
 
@@ -4634,426 +4526,11 @@ function csvEscape(v){
   return v;
 }
 
-const exportAllCSV = requireAdmin(function exportAllCSV(){
-  if(!CU||CU.role!=='admin')return;
-  const d=gDB();
-  const rows=[['Name','Email','Goal','Status','Joined','Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
-  const members=Object.values(d.users).filter(u=>u.role!=='admin');
-  const sqL=['Poor','Fair','Good','Great'];
-  members.forEach(u=>{
-    const ci=Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
-    if(!ci.length){
-      rows.push([u.name,u.email,u.goal,u.status,u.joined,'','','','','','','','','','','']);
-    }else{
-      ci.forEach(c=>{
-        rows.push([u.name,u.email,u.goal,u.status,u.joined,c.date,c.weight,c.waist,c.steps,c.sleep,c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger,c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']);
-      });
-    }
-  });
-  const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
-  downloadBlob(csv,'shredlane-data-'+today()+'.csv','text/csv');
-  toast('⬇️ CSV downloaded','g');
-});
 
-function exportMyCSV(){
-  if(!CU)return;
-  const u=VIEWUSER||CU;
-  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].sort((a,b)=>a.date.localeCompare(b.date));
-  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
-  const sqL=['Poor','Fair','Good','Great'];
-  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
-  const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
-  downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
-  toast('⬇️ CSV exported','g');
-}
-
-function exportMyPDF(){
-  if(!CU)return;
-  const u=VIEWUSER||CU;
-  const ci=[...(Array.isArray(gDB().checkins[u.email])?gDB().checkins[u.email]:[])].filter(e=>e&&e.date).sort((a,b)=>a.date.localeCompare(b.date));
-  if(!ci.length){toast('No check-in data to export','a');return;}
-  const {jsPDF}=window.jspdf;
-  const doc=new jsPDF();
-
-  // ── Helpers ──
-  const avg=arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
-  const fmtAvg=(v,dp=1)=>v!=null?v.toFixed(dp):'—';
-  const chg=(a,b)=>b!=null&&a!=null?b-a:null;
-  const chgStr=(v,u)=>(v>0?'+':'')+v.toFixed(1)+u;
-  const pct=(arr,key)=>{const vals=arr.filter(c=>c[key]!=null);if(!vals.length)return null;if(typeof vals[0][key]==='number')return Math.round(vals.reduce((s,c)=>s+c[key],0)/vals.length);return Math.round(vals.filter(c=>c[key]===true).length/vals.length*100);};
-
-  // ── Scores ──
-  const last=ci[ci.length-1];
-  const baseW=u.baseWeight,baseWa=u.baseWaist;
-  const wLost=chg(baseW,last?.weight);
-  const waLost=chg(baseWa,last?.waist);
-  const stepsHits=ci.filter(c=>(c.steps||0)>=10000).length;
-  const avgW=avg(ci.map(c=>c.weight).filter(Boolean));
-  const avgWa=avg(ci.map(c=>c.waist).filter(Boolean));
-  const avgSt=avg(ci.map(c=>c.steps).filter(Boolean));
-  const avgSl=avg(ci.map(c=>c.sleep).filter(Boolean));
-  const avgHu=avg(ci.map(c=>c.hunger).filter(Boolean));
-
-  function scoreBodyComp(){if(!baseW||!baseWa||!last)return null;const wp=Math.max(0,Math.min(100,((baseW-last.weight)/baseW)*500+50));const wap=Math.max(0,Math.min(100,((baseWa-last.waist)/baseWa)*500+50));return Math.round((wp+wap)/2);}
-  function scoreEnergy(){const s=avgSl;if(s==null)return null;return Math.round(Math.max(0,Math.min(100,100-Math.abs(s-8)*20)));}
-  function scoreHunger(){if(avgHu==null)return null;return Math.round(Math.max(0,Math.min(100,100-Math.abs(avgHu-4.5)*15)));}
-  function scoreActivity(){return ci.length?Math.round(stepsHits/ci.length*100):null;}
-  function overallScore(){const sc=[scoreBodyComp(),scoreEnergy(),scoreHunger(),scoreActivity()].filter(v=>v!=null);return sc.length?Math.round(sc.reduce((s,v)=>s+v,0)/sc.length):null;}
-
-  function trafficLight(s){
-    if(s==null)return{r:[150,150,150],hex:'#969696',label:'No data'};
-    if(s>=75)return{r:[15,160,80],hex:'#0FA050',label:'On Track'};
-    if(s>=50)return{r:[200,140,0],hex:'#C88C00',label:'Needs Attention'};
-    return{r:[200,50,50],hex:'#C83232',label:'Off Track'};
-  }
-
-  // ── Page footer ──
-  function drawFooter(){
-    const n=doc.getNumberOfPages();
-    for(let p=1;p<=n;p++){
-      doc.setPage(p);
-      doc.setFillColor(14,14,14);doc.rect(0,283,210,14,'F');
-      doc.setFontSize(7);doc.setTextColor(120,120,120);doc.setFont(undefined,'normal');
-      doc.text('Shredlane Coaching · shredlane1@gmail.com · +254 705 671 119',14,291);
-      doc.text('Page '+p+' of '+n,196,291,{align:'right'});
-    }
-  }
-
-  // ── Page header bar ──
-  function drawHeader(subtitle){
-    doc.setFillColor(14,14,14);doc.rect(0,0,210,20,'F');
-    doc.setFontSize(13);doc.setFont(undefined,'bold');doc.setTextColor(126,224,0);
-    doc.text('SHREDLANE',14,13);
-    doc.setFontSize(8);doc.setTextColor(180,180,180);doc.setFont(undefined,'normal');
-    doc.text(subtitle,196,13,{align:'right'});
-  }
-
-  // ── Watermark ──
-  function drawWatermark(){
-    doc.saveGraphicsState();
-    doc.setGState(new doc.GState({opacity:0.04}));
-    doc.setFontSize(52);doc.setFont(undefined,'bold');doc.setTextColor(80,80,80);
-    doc.text('SHREDLANE',105,160,{align:'center',angle:45});
-    doc.restoreGraphicsState();
-    doc.setTextColor(20,20,20);doc.setFont(undefined,'normal');
-  }
-
-  // ══════════════════════════════════════
-  // PAGE 1 — SUMMARY
-  // ══════════════════════════════════════
-  drawHeader('PROGRESS REPORT CARD · '+today());
-  drawWatermark();
-  let y=28;
-
-  // Name block
-  doc.setFontSize(15);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text(u.name,14,y);
-  doc.setFontSize(8);doc.setFont(undefined,'normal');doc.setTextColor(110,110,110);
-  doc.text(u.email+'  ·  Goal: '+u.goal+'  ·  '+ci.length+' check-ins  ·  '+ci[0].date+' – '+last.date,14,y+6);
-  y+=14;
-
-  // Overall score pill
-  const overall=overallScore();
-  const tlo=trafficLight(overall);
-  doc.setFillColor(...tlo.r);
-  doc.roundedRect(14,y,50,10,2,2,'F');
-  doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
-  doc.text('OVERALL: '+(overall!=null?overall+'%':'—'),18,y+7);
-  doc.setFontSize(7);doc.setTextColor(110,110,110);doc.setFont(undefined,'normal');
-  doc.text(tlo.label,68,y+7);
-  y+=16;
-
-  // 4 stat boxes
-  const stats=[
-    {lbl:'Weight change',val:wLost!=null?chgStr(wLost,' kg'):'—',sub:baseW?baseW+' → '+(last?.weight??'—')+' kg':'—',good:wLost!=null&&wLost<0},
-    {lbl:'Waist change',val:waLost!=null?chgStr(waLost,' in'):'—',sub:baseWa?baseWa+' → '+(last?.waist??'—')+' in':'—',good:waLost!=null&&waLost<0},
-    {lbl:'Avg steps / day',val:avgSt!=null?Math.round(avgSt).toLocaleString():'—',sub:stepsHits+'/'+ci.length+' days ≥10K',good:avgSt!=null&&avgSt>=7000},
-    {lbl:'Avg sleep',val:fmtAvg(avgSl)+' hrs',sub:'Avg hunger '+fmtAvg(avgHu)+'/10',good:avgSl!=null&&avgSl>=7},
-  ];
-  const bx=14,bw=43,bgap=3;
-  stats.forEach((s,i)=>{
-    const bxx=bx+i*(bw+bgap);
-    doc.setFillColor(246,246,246);doc.roundedRect(bxx,y,bw,22,2,2,'F');
-    doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
-    doc.text(s.lbl,bxx+4,y+7);
-    doc.setFontSize(12);doc.setFont(undefined,'bold');
-    doc.setTextColor(...(s.good?[15,160,80]:[200,50,50]));
-    doc.text(s.val,bxx+4,y+16);
-    doc.setFontSize(6.5);doc.setFont(undefined,'normal');doc.setTextColor(140,140,140);
-    doc.text(s.sub,bxx+4,y+21);
-  });
-  y+=28;
-
-  // Score bars
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Performance scores',14,y);y+=6;
-
-  const dims=[
-    {lbl:'Body composition',sub:'Weight & waist vs baseline',score:scoreBodyComp()},
-    {lbl:'Sleep / energy',sub:'Avg sleep hours (target 7–9h)',score:scoreEnergy()},
-    {lbl:'Hunger control',sub:'Hunger score – lower is better',score:scoreHunger()},
-    {lbl:'Activity',sub:'Days hitting 10,000 step target',score:scoreActivity()},
-  ];
-  dims.forEach(d=>{
-    const tl=trafficLight(d.score);
-    const sc=d.score??0;
-    doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-    doc.text(d.lbl,14,y+4);
-    doc.setFontSize(6);doc.setFont(undefined,'normal');doc.setTextColor(130,130,130);
-    doc.text(d.sub,14,y+9);
-    // bar bg
-    doc.setFillColor(228,228,228);doc.roundedRect(90,y,96,8,2,2,'F');
-    // bar fill
-    if(d.score!=null&&d.score>0){
-      const fw=Math.max(4,96*sc/100);
-      doc.setFillColor(...tl.r);doc.roundedRect(90,y,fw,8,2,2,'F');
-      doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
-      if(fw>14)doc.text(sc+'%',90+fw/2,y+5.5,{align:'center'});
-    }
-    // score outside if bar too short
-    if(d.score!=null&&(96*sc/100)<=14){
-      doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(...tl.r);
-      doc.text(sc+'%',90+(96*sc/100)+3,y+5.5);
-    }
-    y+=13;
-  });
-
-  // Key insight box
-  y+=4;
-  doc.setFillColor(240,248,240);doc.roundedRect(14,y,182,18,2,2,'F');
-  doc.setFontSize(7.5);doc.setFont(undefined,'bold');doc.setTextColor(15,100,50);
-  doc.text('Key insight',18,y+6);
-  doc.setFont(undefined,'normal');doc.setTextColor(30,80,30);
-  const lost=wLost!=null?Math.abs(wLost).toFixed(1)+' kg':null;
-  const waistLost=waLost!=null?Math.abs(waLost).toFixed(1)+' in':null;
-  let insight='Strong body composition progress';
-  if(lost&&waistLost)insight='Lost '+lost+' and '+waistLost+' of waist in '+Math.round(ci.length/7)+' weeks. ';
-  if(scoreActivity()!=null&&scoreActivity()<50)insight+='Step compliance is the main gap — only '+stepsHits+' days hit 10K target.';
-  else if(scoreActivity()!=null&&scoreActivity()>=75)insight+='Activity target well maintained.';
-  doc.text(insight,18,y+12,{maxWidth:174});
-  y+=22;
-
-  // ══════════════════════════════════════
-  // PAGE 2 — TREND CHARTS
-  // ══════════════════════════════════════
-  doc.addPage();drawHeader('TREND ANALYSIS — Full Programme History');drawWatermark();
-  y=26;
-
-  // ── Chart drawing function (Y-axis CORRECTED: high value = top of chart) ──
-  function drawChart(cy,ch,pts,label,unit,baseline,lineHex,fillHex){
-    const cx=14,cw=182,pl=26,pr=6,pt=8,pb=16;
-    const px=cx+pl,pw=cw-pl-pr,ph=ch-pt-pb,pyTop=cy+pt;
-    const valid=pts.filter(p=>p.v!=null&&!isNaN(p.v));
-    if(valid.length<2){
-      doc.setFontSize(7);doc.setTextColor(150,150,150);
-      doc.text('Not enough data',cx+cw/2,cy+ch/2,{align:'center'});
-      return;
-    }
-    const vals=valid.map(p=>p.v);
-    let lo=Math.min(...vals),hi=Math.max(...vals);
-    if(baseline!=null){lo=Math.min(lo,baseline);hi=Math.max(hi,baseline);}
-    const pad=(hi-lo)*0.15||0.5; lo-=pad; hi+=pad;
-    const range=hi-lo||1;
-    // CORRECTED: higher value → smaller Y (higher on page)
-    const tx=i=>px+i/(valid.length-1)*pw;
-    const tv=v=>pyTop+ph*(1-(v-lo)/range);  // <-- fixed axis
-
-    // background
-    doc.setFillColor(248,248,248);doc.roundedRect(cx,cy,cw,ch,2,2,'F');
-
-    // grid lines & Y labels (5 horizontal)
-    doc.setDrawColor(220,220,220);doc.setLineWidth(0.2);
-    for(let g=0;g<=4;g++){
-      const gv=lo+g/4*range;
-      const gy=tv(gv);
-      doc.line(px,gy,px+pw,gy);
-      doc.setFontSize(5);doc.setTextColor(160,160,160);
-      doc.text(gv.toFixed(1),px-2,gy+1.5,{align:'right'});
-    }
-
-    // Baseline dashed line
-    if(baseline!=null){
-      const by=tv(baseline);
-      doc.setDrawColor(200,80,80);doc.setLineWidth(0.5);
-      doc.setLineDashPattern([2,1.5],0);
-      doc.line(px,by,px+pw,by);
-      doc.setFontSize(5.5);doc.setTextColor(200,80,80);
-      doc.text('Baseline '+baseline+unit,px+pw-1,by-1.5,{align:'right'});
-      doc.setLineDashPattern([],0);
-    }
-
-    // Fill under line (simulate with vertical strokes)
-    doc.setDrawColor(fillHex);doc.setLineWidth(0.4);
-    valid.forEach((p,i)=>{
-      const x=tx(i),yy=tv(p.v);
-      doc.line(x,yy,x,pyTop+ph);
-    });
-
-    // Trend line
-    doc.setDrawColor(lineHex);doc.setLineWidth(1.3);
-    for(let i=1;i<valid.length;i++){
-      doc.line(tx(i-1),tv(valid[i-1].v),tx(i),tv(valid[i].v));
-    }
-
-    // Dots (if ≤50 points)
-    if(valid.length<=50){
-      valid.forEach((p,i)=>{
-        const hex=lineHex;
-        const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-        doc.setFillColor(r,g,b);
-        doc.circle(tx(i),tv(p.v),0.7,'F');
-      });
-    }
-
-    // First & last callout
-    const fp=valid[0],lp=valid[valid.length-1];
-    doc.setFontSize(6);doc.setFont(undefined,'bold');
-    const lr=parseInt(lineHex.slice(1,3),16),lg=parseInt(lineHex.slice(3,5),16),lb=parseInt(lineHex.slice(5,7),16);
-    doc.setTextColor(lr,lg,lb);
-    doc.text(fp.v.toFixed(1)+unit,tx(0),tv(fp.v)-2.5,{align:'center'});
-    doc.text(lp.v.toFixed(1)+unit,tx(valid.length-1),tv(lp.v)-2.5,{align:'center'});
-
-    // X-axis dates (~6 labels)
-    doc.setFontSize(5);doc.setTextColor(130,130,130);doc.setFont(undefined,'normal');
-    const step=Math.max(1,Math.floor(valid.length/6));
-    valid.forEach((p,i)=>{
-      if(i===0||i===valid.length-1||i%step===0){
-        doc.text(p.date.slice(5),tx(i),pyTop+ph+6,{align:'center'});
-      }
-    });
-
-    // Chart label
-    doc.setFontSize(8);doc.setFont(undefined,'bold');doc.setTextColor(30,30,30);
-    doc.text(label,cx+4,cy+6);
-
-    // Change badge (top right)
-    const chgV=lp.v-fp.v;
-    const isGood=chgV<=0;
-    const br=isGood?15:200,bg=isGood?160:50,bb=isGood?80:50;
-    doc.setFillColor(br,bg,bb);
-    doc.roundedRect(cx+cw-38,cy+1,36,10,2,2,'F');
-    doc.setFontSize(6.5);doc.setFont(undefined,'bold');doc.setTextColor(255,255,255);
-    doc.text((chgV>0?'+':'')+chgV.toFixed(1)+unit+' overall',cx+cw-20,cy+7.5,{align:'center'});
-  }
-
-  // Data arrays
-  const wtPts=ci.filter(c=>c.weight!=null).map(c=>({date:c.date,v:c.weight}));
-  const waPts=ci.filter(c=>c.waist!=null).map(c=>({date:c.date,v:c.waist}));
-  const stPts=ci.filter(c=>c.steps!=null).map(c=>({date:c.date,v:c.steps}));
-  const slPts=ci.filter(c=>c.sleep!=null).map(c=>({date:c.date,v:c.sleep}));
-
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Body composition',14,y);
-  doc.setFontSize(6.5);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
-  doc.text('Daily measurements · dashed = baseline · green badge = improvement',14,y+5);
-  y+=8;
-
-  drawChart(y,55,wtPts,'Weight (kg)',' kg',baseW||null,'#0F9050','#AEDCC0');y+=59;
-  drawChart(y,55,waPts,'Waist (inches)',' in',baseWa||null,'#185FA5','#B5D4F4');y+=62;
-
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Activity & recovery',14,y);y+=7;
-  drawChart(y,46,stPts,'Steps / day','',null,'#C87800','#FAC775');y+=50;
-  drawChart(y,38,slPts,'Sleep (hours)',' h',null,'#7B3FB0','#D4AEFA');
-
-  // ══════════════════════════════════════
-  // PAGE 3 — WEEKLY SUMMARY TABLE
-  // ══════════════════════════════════════
-  doc.addPage();drawHeader('WEEK-BY-WEEK SUMMARY');drawWatermark();
-  y=28;
-
-  doc.setFontSize(9);doc.setFont(undefined,'bold');doc.setTextColor(20,20,20);
-  doc.text('Weekly summary',14,y);
-  doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(120,120,120);
-  doc.text('Avg values per week · ↓ = improvement on previous week · Full daily log available as CSV export',14,y+5);
-  y+=12;
-
-  // Build weekly buckets
-  const wkMap={};
-  ci.forEach(c=>{
-    const wn=Math.floor((new Date(c.date+'T00:00:00')-new Date(ci[0].date+'T00:00:00'))/(7*86400000));
-    if(!wkMap[wn])wkMap[wn]={n:wn,start:c.date,entries:[]};
-    wkMap[wn].entries.push(c);
-  });
-  const weeks=Object.values(wkMap).sort((a,b)=>a.n-b.n);
-
-  // Table header
-  const cols2=[14,46,86,112,140,162,182];
-  const hdrs=['Week','Start','Wt (kg)','Waist','Steps/d','Sleep','Hunger'];
-  doc.setFillColor(14,14,14);doc.rect(14,y,182,8,'F');
-  doc.setFontSize(7);doc.setFont(undefined,'bold');doc.setTextColor(200,200,200);
-  hdrs.forEach((h,i)=>doc.text(h,cols2[i]+1,y+5.5));
-  y+=8;
-
-  weeks.forEach((wk,wi)=>{
-    if(y>270){doc.addPage();drawHeader('WEEK-BY-WEEK SUMMARY (cont.)');drawWatermark();y=28;}
-    const e=wk.entries;
-    const wAvg=avg(e.map(c=>c.weight).filter(Boolean));
-    const waAvg=avg(e.map(c=>c.waist).filter(Boolean));
-    const stAvg=avg(e.map(c=>c.steps).filter(Boolean));
-    const slAvg=avg(e.map(c=>c.sleep).filter(Boolean));
-    const huAvg=avg(e.map(c=>c.hunger).filter(Boolean));
-    const prev=wi>0?weeks[wi-1].entries:null;
-    const prevW=prev?avg(prev.map(c=>c.weight).filter(Boolean)):null;
-    const prevWa=prev?avg(prev.map(c=>c.waist).filter(Boolean)):null;
-    const wDir=wAvg!=null&&prevW!=null?(wAvg<prevW?'↓':wAvg>prevW?'↑':''):null;
-    const waDir=waAvg!=null&&prevWa!=null?(waAvg<prevWa?'↓':waAvg>prevWa?'↑':''):null;
-
-    doc.setFillColor(wi%2===0?248:255,wi%2===0?248:255,wi%2===0?248:255);
-    doc.rect(14,y,182,8,'F');
-    doc.setFontSize(7);doc.setFont(undefined,'normal');doc.setTextColor(40,40,40);
-    doc.text('Wk '+(wi+1),cols2[0]+1,y+5.5);
-    doc.text(wk.start.slice(5),cols2[1]+1,y+5.5);
-
-    // Weight with direction arrow
-    if(wAvg!=null){
-      doc.setTextColor(wDir==='↓'?15:wDir==='↑'?180:40, wDir==='↓'?140:wDir==='↑'?40:40, wDir==='↓'?60:40);
-      doc.text(wAvg.toFixed(1)+(wDir?' '+wDir:''),cols2[2]+1,y+5.5);
-    } else {doc.setTextColor(150,150,150);doc.text('—',cols2[2]+1,y+5.5);}
-
-    if(waAvg!=null){
-      doc.setTextColor(waDir==='↓'?15:waDir==='↑'?180:40, waDir==='↓'?140:waDir==='↑'?40:40, waDir==='↓'?60:40);
-      doc.text(waAvg.toFixed(1)+(waDir?' '+waDir:''),cols2[3]+1,y+5.5);
-    } else {doc.setTextColor(150,150,150);doc.text('—',cols2[3]+1,y+5.5);}
-
-    doc.setTextColor(40,40,40);
-    doc.text(stAvg!=null?Math.round(stAvg).toLocaleString():'—',cols2[4]+1,y+5.5);
-    doc.text(slAvg!=null?slAvg.toFixed(1)+'h':'—',cols2[5]+1,y+5.5);
-    doc.text(huAvg!=null?huAvg.toFixed(1):'—',cols2[6]+1,y+5.5);
-    y+=8;
-  });
-
-  // ── Footers on all pages ──
-  drawFooter();
-
-  doc.save('shredlane-report-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.pdf');
-  toast('📄 Report card downloaded','g');
-}
 // ═══════════════════════════════════════
 
 // ── Admin: download report for a specific user by email ──
-function exportUserPDF(email){
-  const u=gDB().users[email];
-  if(!u){toast('User not found','r');return;}
-  // Temporarily set VIEWUSER so exportMyPDF picks the right user
-  const prev=VIEWUSER;
-  VIEWUSER=u;
-  exportMyPDF();
-  VIEWUSER=prev;
-}
 
-function exportUserCSV(email){
-  const u=gDB().users[email];
-  if(!u){toast('User not found','r');return;}
-  const ci=[...(Array.isArray(gDB().checkins[email])?gDB().checkins[email]:[])].filter(e=>e&&e.date).sort((a,b)=>a.date.localeCompare(b.date));
-  if(!ci.length){toast('No check-ins to export for '+u.name,'a');return;}
-  const sqL=['Poor','Fair','Good','Great'];
-  const rows=[['Date','Weight (kg)','Waist (in)','Steps','Sleep (hrs)','Sleep Quality','Hunger (1-10)','Water (glasses)','Protein %','Workout','Notes']];
-  ci.forEach(c=>rows.push([c.date,c.weight??'',c.waist??'',c.steps??'',c.sleep??'',c.sleepQual!=null?sqL[c.sleepQual]:'',c.hunger??'',c.water??'',c.protein!=null?c.protein+'%':'',c.workout===true?'Yes':c.workout===false?'No':'',c.notes||'']));
-  const csv=rows.map(r=>r.map(csvEscape).join(',')).join('\n');
-  downloadBlob(csv,'shredlane-'+u.name.replace(/\s+/g,'_')+'-'+today()+'.csv','text/csv');
-  toast('⬇️ CSV exported for '+u.name,'g');
-}
 
 // ═══════════════════════════════════════
 // CLIENT UX PACK — reminders, rest timer, PWA, offline, share, etc.
@@ -5274,11 +4751,11 @@ function applyWeeklyTemplate(email, key){
   const guar = document.getElementById('wkGuar-'+id);
   if(!note) return;
   const map = {
-    strong: 'Great consistency this week. Keep the same standard next week.',
-    water: 'Main focus next week: hit your water target at least 5 days.',
-    steps: 'Main focus next week: hit your step target at least 5 days.',
-    train: 'Main focus next week: complete all planned training sessions.',
-    photos: 'Upload progress photos this week (every 2 weeks keeps adherence on track).'
+    strong: 'Really proud of how consistent you have been. Keep it going.',
+    water: 'I want water to be non-negotiable for you this week.',
+    steps: 'Prioritise steps this week even on busy days.',
+    train: 'Do not skip sessions this week — train first, negotiate later.',
+    photos: 'Get your progress photos in this week so we can review properly.'
   };
   note.value = map[key] || '';
   if(guar && key==='strong') guar.value = 'On track';
@@ -5347,33 +4824,69 @@ function buildWeeklyClientMessage(email){
   else if(photosThis14===0 && photosPrev14>=1) photoTrend = 'regressed vs prior 2 weeks';
   else if(photosThis14===0 && photosPrev14===0) photoTrend = 'missed both 2-week windows';
 
-  // Score each habit 0–100 for last 7 days (target-met where it matters)
+  // Score habits 0–100. Priority = coaching impact when the habit is weak.
   const scores = [
-    {key:'weight', label:'Weigh-ins', pct: Math.round((c.daysWeighed/7)*100), tip:'Weigh in every morning, same conditions'},
-    {key:'waist', label:'Waist logging', pct: Math.round((c.daysWaist/7)*100), tip:'Log waist with the same morning routine'},
-    {key:'steps', label:'Steps at target', pct: Math.round((c.daysStepsMet/7)*100), tip:'Hit your step target at least 5 days'},
-    {key:'water', label:'Water at target', pct: Math.round((c.daysWaterMet/7)*100), tip:'Hit your water target at least 5 days'},
-    {key:'sleep', label:'Sleep logging', pct: Math.round((c.daysSleep/7)*100), tip:'Log sleep every day so we can see the pattern'},
-    {key:'training', label:'Training', pct: c.trainingPct, tip:'Complete your planned training sessions'},
-    {key:'photos', label:'Progress photos (14d)', pct: photoPct, tip:'Upload progress photos at least once every 2 weeks'},
+    {key:'weight', label:'Weigh-ins', pct: Math.round((c.daysWeighed/7)*100), priority: 9,
+      tip:'Weigh in every morning under the same conditions so we can trust the trend.',
+      detail: function(){ return this.pct+'% of days logged ('+c.daysWeighed+'/7).'; }},
+    {key:'waist', label:'Waist logging', pct: Math.round((c.daysWaist/7)*100), priority: 8,
+      tip:'Log waist with the same morning routine as weight.',
+      detail: function(){ return this.pct+'% of days logged ('+c.daysWaist+'/7).'; }},
+    {key:'water', label:'Water at target', pct: Math.round((c.daysWaterMet/7)*100), priority: 10,
+      tip:'Hit your water target at least 5 days next week. This is often the fastest adherence win.',
+      detail: function(){ return c.daysWaterMet+' of 7 days at target (logged '+c.daysWaterLogged+'/7).'; }},
+    {key:'steps', label:'Steps at target', pct: Math.round((c.daysStepsMet/7)*100), priority: 9,
+      tip:'Hit your step target at least 5 days next week.',
+      detail: function(){ return c.daysStepsMet+' of 7 days at target (logged '+c.daysStepsLogged+'/7).'; }},
+    {key:'training', label:'Training', pct: c.trainingPct, priority: 10,
+      tip:'Complete all planned training sessions next week. Open Train and finish the session that loads.',
+      detail: function(){ return c.workouts+' of '+c.prescribed+' sessions ('+c.trainingPct+'%).'; }},
+    {key:'sleep', label:'Sleep logging', pct: Math.round((c.daysSleep/7)*100), priority: 5,
+      tip:'Log sleep every night so we can see recovery patterns.',
+      detail: function(){ return c.daysSleep+' of 7 days logged.'; }},
+    {key:'photos', label:'Progress photos (14d)', pct: photoPct, priority: 7,
+      tip:'Upload progress photos at least once every 2 weeks (Sunday is a good day).',
+      detail: function(){ return photosThis14>=1 ? ('uploaded in last 14 days · last '+lastPhoto) : ('no photo in 14 days'+(lastPhoto?(' · last '+lastPhoto):'')); }},
   ];
-  if(pro!=null && !isNaN(pro)) scores.push({key:'protein', label:'Protein target', pct: Math.round((pro/7)*100), tip:'Hit protein on more days in MyNetDiary'});
-  if(food!=null && !isNaN(food)) scores.push({key:'food', label:'Food logging', pct: Math.round((food/7)*100), tip:'Log food every day in MyNetDiary'});
+  if(pro!=null && !isNaN(pro)) scores.push({key:'protein', label:'Protein target', pct: Math.round((pro/7)*100), priority: 8,
+    tip:'Hit protein on more days in MyNetDiary next week.',
+    detail: function(){ return pro+' of 7 days.'; }});
+  if(food!=null && !isNaN(food)) scores.push({key:'food', label:'Food logging', pct: Math.round((food/7)*100), priority: 6,
+    tip:'Log food every day in MyNetDiary.',
+    detail: function(){ return food+' of 7 days.'; }});
 
-  const ranked = scores.slice().sort((a,b)=>b.pct-a.pct);
-  const wins = ranked.filter(s=>s.pct>=85);
+  scores.forEach(function(s){
+    const gap = Math.max(0, 85 - s.pct);
+    s.urgency = gap * (s.priority||5);
+  });
+  const ranked = scores.slice().sort(function(a,b){ return b.pct - a.pct; });
+  const wins = ranked.filter(function(s){ return s.pct>=85; });
   const leader = ranked[0];
-  const drag = ranked.slice().sort((a,b)=>a.pct-b.pct)[0]; // weakest
-  const weakList = ranked.filter(s=>s.pct<85).sort((a,b)=>a.pct-b.pct);
+  const weakList = scores.filter(function(s){ return s.pct<85; }).sort(function(a,b){ return (b.urgency-a.urgency) || (a.pct-b.pct); });
+  const drag = weakList[0] || null;
+  const second = weakList[1] || null;
+
+  let bodyFlag = '';
+  if(c.weightAvg!=null && priorWtAvg!=null){
+    const dlt = c.weightAvg - priorWtAvg;
+    if(dlt >= 0.8) bodyFlag = 'Weight is up about '+dlt.toFixed(1)+' kg vs last week, so adherence matters even more.';
+    else if(dlt <= -0.5) bodyFlag = 'Weight is down about '+Math.abs(dlt).toFixed(1)+' kg vs last week — protect that progress.';
+  }
 
   let autoFocus = '';
-  if(drag && drag.pct < 85){
-    autoFocus = drag.tip + ' ('+drag.label+' was at '+drag.pct+' percent this week).';
-  } else if(drag){
-    autoFocus = 'Keep the same standard. Everything sat at or above 85 percent.';
+  if(drag && drag.urgency>0){
+    autoFocus = drag.tip + ' Right now '+drag.label.toLowerCase()+' is the main gap: '+drag.detail();
+    if(second && second.urgency>=20){
+      autoFocus += ' Secondary focus: '+second.label.toLowerCase()+' ('+second.detail()+').';
+    }
+    if(bodyFlag) autoFocus += ' '+bodyFlag;
+  } else {
+    autoFocus = 'Keep the same standard next week. Everything sat at or above 85 percent.';
+    if(bodyFlag) autoFocus += ' '+bodyFlag;
   }
-  // Coach note overrides auto focus text, but we still show wins/drag sections
-  const focusText = note || autoFocus;
+  // App always owns FOCUS NEXT WEEK from data. Coach note is optional extra only.
+  const focusText = autoFocus;
+  const coachExtra = note;
 
   let parts = [];
   parts.push('Hi '+first+',');
@@ -5461,6 +4974,11 @@ function buildWeeklyClientMessage(email){
     parts.push(focusText);
     parts.push('');
   }
+  if(coachExtra){
+    parts.push('*FROM YOUR COACH*');
+    parts.push(coachExtra);
+    parts.push('');
+  }
 
   parts.push('Proud of you. Reply if you need me.');
   parts.push('Coach');
@@ -5495,17 +5013,6 @@ function sendWeeklyClientMessage(email){
   else toast(u.phone ? 'WhatsApp opened with weekly update' : 'WhatsApp opened — pick the client (no phone on file)','g');
 }
 
-function remindClient(firstName, evt, email){
-  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
-  toast('Use Weekly update message on the client instead of daily reminds','a');
-}
-function messageClientCheckIn(firstName, evt, email){
-  if(evt){ try{ evt.preventDefault(); evt.stopPropagation(); }catch(e){} }
-  toast('Open the client and use Weekly update message','a');
-}
-function remindAllNotLogged(){
-  toast('Daily bulk reminds removed — use each client Weekly update message','a');
-}
 async function saveCoachTargets(email){
   if(!CU||CU.role!=='admin')return;
   const id=email.replace(/[^a-zA-Z0-9]/g,'_');
@@ -5640,72 +5147,7 @@ function shareBodyChartImage(){
 }
 
 
-function shareProgressImage(){
-  const u=VIEWUSER||CU;if(!u)return;
-  const ci=myCI().slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const last=ci[ci.length-1];
-  const canvas=document.createElement('canvas');
-  canvas.width=720;canvas.height=900;
-  const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#0e0e0e';ctx.fillRect(0,0,720,900);
-  ctx.fillStyle='#7EE000';ctx.font='bold 36px Barlow Condensed,sans-serif';
-  ctx.fillText('SHREDLANE',40,60);
-  ctx.fillStyle='#fff';ctx.font='bold 42px Barlow Condensed,sans-serif';
-  ctx.fillText(u.name.split(' ')[0],40,120);
-  ctx.fillStyle='#888';ctx.font='22px Barlow,sans-serif';
-  ctx.fillText(today(),40,155);
-  let y=220;
-  const lines=[];
-  if(u.baseWeight&&last)lines.push(['Weight',u.baseWeight+' → '+(last.weight??'—')+' kg']);
-  if(u.baseWaist&&last)lines.push(['Waist',u.baseWaist+' → '+(last.waist??'—')+' in']);
-  lines.push(['Streak',calcStreak(ci)+' days']);
-  lines.push(['Check-ins',String(ci.length)]);
-  const wkts=myWorkouts();
-  lines.push(['Workouts',String(wkts.length)]);
-  const st=myAssignedProgramState();
-  if(st.prog)lines.push(['Program',st.prog.name]);
-  lines.forEach(([k,v])=>{
-    ctx.fillStyle='#666';ctx.font='20px Barlow,sans-serif';ctx.fillText(k,40,y);
-    ctx.fillStyle='#fff';ctx.font='bold 28px Barlow Condensed,sans-serif';ctx.fillText(String(v),280,y);
-    y+=56;
-  });
-  ctx.fillStyle='#7EE000';ctx.font='18px Barlow,sans-serif';
-  ctx.fillText('shredlane · consistency compounds',40,860);
-  canvas.toBlob(blob=>{
-    if(!blob)return;
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download='shredlane-progress-'+today()+'.png';
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast('📲 Progress image saved — share anywhere','g');
-  },'image/png');
-}
-
 // Workout calendar
-function renderWorkoutCalendar(workouts){
-  const card=document.getElementById('wktCalCard');
-  const grid=document.getElementById('wktCalGrid');
-  if(!card||!grid)return;
-  const dates=new Set((workouts||[]).map(w=>w.date));
-  if(!dates.size){card.style.display='none';return;}
-  card.style.display='block';
-  const now=new Date();
-  const y=now.getFullYear(),m=now.getMonth();
-  const first=new Date(y,m,1);
-  const startPad=first.getDay(); // 0 Sun
-  const daysInMonth=new Date(y,m+1,0).getDate();
-  const t=today();
-  let html='';
-  ['S','M','T','W','T','F','S'].forEach(d=>{html+=`<div class="wkt-cal-d" style="border:none;background:none;color:var(--gry2);font-weight:800">${d}</div>`;});
-  for(let i=0;i<startPad;i++)html+=`<div class="wkt-cal-d" style="opacity:.3"></div>`;
-  for(let d=1;d<=daysInMonth;d++){
-    const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    const has=dates.has(ds);
-    html+=`<div class="wkt-cal-d${has?' has':''}${ds===t?' today':''}" title="${ds}">${d}</div>`;
-  }
-  grid.innerHTML=html;
-}
 
 // Photo before/after
 function renderPhotoCompare(){
@@ -5966,7 +5408,6 @@ async function saveDemo(){
     demoUploadFile=null;
     toast('🎬 Demo uploaded','g');
     renderAdmin();
-    if(document.getElementById('scr-library').classList.contains('active')) renderLibrary();
   } catch(e){
     console.error(e);
     toast('Upload failed','r');
@@ -5974,52 +5415,10 @@ async function saveDemo(){
     if(btn){ btn.textContent=orig; btn.disabled=false; }
   }
 }
-function renderLibrary(){
-  const grid = document.getElementById('libraryGrid');
-  if(!grid) return;
-  const demos = Object.values(gDB().demos||{}).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(!demos.length){ grid.innerHTML='<div class="wkt-empty">No demo videos yet — check back soon.</div>'; return; }
-
-  const groups = {};
-  demos.forEach(d=>{ (groups[d.group]=groups[d.group]||[]).push(d); });
-  grid.innerHTML = Object.entries(groups).map(([group, list])=>`
-    <div class="card">
-      <div class="card-lbl">${escHtml(group)}</div>
-      <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-        ${list.map(d=>`
-          <div style="background:var(--dark2);border:1px solid var(--bdr2);border-radius:10px;padding:12px;position:relative;">
-            ${isAdmin()?`<button onclick="event.stopPropagation();deleteDemo('${d.id}')" style="position:absolute;top:8px;right:8px;background:var(--dark3);border:1px solid var(--bdr2);border-radius:6px;color:var(--red);font-size:12px;padding:4px 8px;cursor:pointer;z-index:2;">🗑 Delete</button>`:''}
-            <div style="font-size:14px;font-weight:700;color:var(--wht);margin-bottom:8px;">${escHtml(d.name)}</div>
-            <video controls preload="metadata" style="width:100%;border-radius:8px;display:block;max-height:220px;background:#000;">
-              <source src="${d.videoUrl||d.url}" type="video/mp4">
-            </video>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
-}
 
 // ═══════════════════════════════════════
 // ADMIN: RENDER DEMOS & MEMBER PHOTOS
 // ═══════════════════════════════════════
-function renderAdminDemos(){
-  const el = document.getElementById('adminDemoList');
-  if(!el) return;
-  const demos = Object.values(gDB().demos||{}).sort((a,b)=>b.created-a.created);
-  if(!demos.length){ el.innerHTML='<div class="mc" style="font-size:12px;color:var(--gry);">No demos uploaded yet.</div>'; return; }
-  el.innerHTML = demos.map(d=>`
-    <div class="mc">
-      <div class="mc-top">
-        <div>
-          <div class="mc-nm">${escHtml(d.name)}</div>
-          <div class="mc-em">${escHtml(d.group)} • ${new Date(d.created).toLocaleDateString()}</div>
-        </div>
-        <button class="reject-btn" onclick="deleteDemo('${d.id}')">Delete</button>
-      </div>
-    </div>
-  `).join('');
-}
 async function deleteDemo(id){
   if(!confirm('Delete this demo?')) return;
   try{
