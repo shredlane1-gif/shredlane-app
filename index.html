@@ -500,6 +500,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .tb{min-height:52px}
 #offlineBanner{display:none;position:fixed;top:0;left:0;right:0;z-index:10000;background:#C83232;color:#fff;text-align:center;padding:8px 12px;font-size:12px;font-weight:700}
 #offlineBanner.show{display:block}
+#syncStatus{display:flex!important}
 #pwaInstall{display:none;position:fixed;bottom:72px;left:12px;right:12px;z-index:900;background:var(--dark2);border:1px solid var(--grn);border-radius:14px;padding:12px 14px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
 #pwaInstall.show{display:flex;align-items:center;gap:12px;justify-content:space-between}
 #restTimer{display:none;position:fixed;bottom:80px;right:14px;z-index:950;background:var(--dark2);border:1px solid var(--grn);border-radius:16px;padding:12px 16px;min-width:120px;text-align:center;box-shadow:0 8px 28px rgba(0,0,0,.5)}
@@ -527,6 +528,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 </head>
 <body>
 <div id="offlineBanner" role="status" aria-live="polite">📡 You’re offline — check-ins & workouts still save on this phone and sync later</div>
+<div id="syncStatus" style="display:none;position:fixed;top:8px;right:10px;z-index:9999;font-size:10px;font-weight:700;padding:4px 8px;border-radius:20px;background:#111;border:1px solid #333;color:#888;align-items:center;gap:5px"><span id="syncDot" style="width:7px;height:7px;border-radius:50%;background:#7EE000;display:inline-block"></span><span id="syncLbl">Synced</span></div>
 <div id="pwaInstall" role="dialog" aria-label="Install app">
   <div style="font-size:13px;font-weight:700;color:var(--wht);flex:1">Install Shredlane on your home screen for faster daily check-ins</div>
   <button class="b-grn" style="width:auto;padding:8px 14px;background:var(--grn);color:#000;border:none;border-radius:8px;font-weight:800;cursor:pointer" onclick="installPWA()">Install</button>
@@ -2254,12 +2256,17 @@ async function saveCI(){
     await ref.set({entries:list});
     if(!CACHE.checkins)CACHE.checkins={};
     CACHE.checkins[CU.email]=list;
-    if(offline) toast('💾 OFFLINE — check-in saved on this phone. Will sync when you are back online.','a');
-    else toast('🔥 Check-in saved!','g');
+    let nextAct = 'You are done for today.';
+    try{
+      const nxt = nextProgramSession(CU, typeof myWorkouts==='function'?myWorkouts():[]);
+      if(nxt && nxt.day) nextAct = 'Train is ready — '+((nxt.day.name)||'next session');
+    }catch(e){}
+    if(offline) toast('💾 OFFLINE — saved · '+nextAct,'a');
+    else toast('🔥 Saved · '+nextAct,'g');
     renderDash(); renderHistory();
+    try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e){}
   }catch(e){
     console.error(e);
-    // Still keep local copy so the member doesn't lose the entry
     if(!CACHE.checkins)CACHE.checkins={};
     CACHE.checkins[CU.email]=CACHE.checkins[CU.email]||[];
     const localIdx=CACHE.checkins[CU.email].findIndex(c=>c.date===t);
@@ -3568,6 +3575,51 @@ function renderTrend(){
 // DASHBOARD
 // ═══════════════════════════════════════
 
+
+function renderMissedDayNudge(u, ci){
+  let el=document.getElementById('dashMissedNudge');
+  if(!el){
+    el=document.createElement('div');
+    el.id='dashMissedNudge';
+    const jobs=document.getElementById('dashTodayJobs');
+    if(jobs&&jobs.parentNode) jobs.parentNode.insertBefore(el, jobs.nextSibling);
+    else {
+      const cont=document.getElementById('dashContent');
+      if(cont) cont.insertBefore(el, cont.firstChild);
+    }
+  }
+  if(!u||VIEWUSER||u.status!=='approved'){ el.style.display='none'; return; }
+  const last=lastCheckinDate(ci);
+  const gap=daysSinceDate(last);
+  if(!last || gap<2){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,184,0,.35)">
+    <div style="font-size:13px;font-weight:700;color:var(--wht)">Log today — one day is enough to restart.</div>
+    <div style="font-size:11px;color:var(--gry);margin-top:4px">${gap} days since your last check-in. No lecture — just open Check-in.</div>
+    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>
+  </div>`;
+}
+function renderNextSessionDash(u, wkts){
+  let el=document.getElementById('dashNextSession');
+  if(!el){
+    el=document.createElement('div');
+    el.id='dashNextSession';
+    const cont=document.getElementById('dashContent');
+    if(cont) cont.insertBefore(el, cont.firstChild);
+  }
+  if(!u||VIEWUSER||!u.programId){ el.style.display='none'; return; }
+  const next=typeof nextProgramSession==='function'?nextProgramSession(u, wkts||[]):null;
+  if(!next||!next.day){ el.style.display='none'; return; }
+  const day=next.day;
+  const names=(day.exercises||[]).slice(0,6).map(ex=>ex.name).filter(Boolean);
+  el.style.display='block';
+  el.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.35)">
+    <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em">Next session</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600;margin:2px 0 6px">${escHtml(day.name||('Day '+(next.index+1)))}</div>
+    ${names.length?`<div style="font-size:12px;color:var(--gry);line-height:1.4">${names.map(n=>escHtml(n)).join(' · ')}${(day.exercises||[]).length>6?' …':''}</div>`:''}
+    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Open Train</button>
+  </div>`;
+}
 function renderTodayJobs(u, ci){
   let el = document.getElementById('dashTodayJobs');
   if(!el){
@@ -3650,8 +3702,11 @@ function renderDash(){
   const ci=myCI();
   const wkts=myWorkouts();
   try{ renderTodayJobs(u, ci); }catch(e){}
+  try{ renderMissedDayNudge(u, ci); }catch(e){}
+  try{ renderNextSessionDash(u, wkts); }catch(e){}
   try{ renderRemindPrompt(u); }catch(e){}
   try{ renderClientAlerts(u, ci); }catch(e){}
+  try{ renderGoalProgress(u, ci); }catch(e){}
 
   // ── Onboarding checklist (first ~2 weeks / sparse data) ──
   const ob=document.getElementById('onboardWrap');
@@ -4185,6 +4240,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID, reset needed</option>
         </select>
         ${u.lastWeeklyMessageAt?`<span style="font-size:11px;color:var(--gry)">Last weekly: ${new Date(u.lastWeeklyMessageAt).toLocaleDateString()}</span>`:'<span style="font-size:11px;color:var(--amb)">No weekly message sent yet</span>'}
+        ${(()=>{ const h=suggestGuarantee(u); return h?`<div style="width:100%;font-size:11px;color:var(--amb);margin-top:4px">💡 App suggests: <strong>${escHtml(h)}</strong> — change the dropdown if you agree</div>`:''; })()}
       </div>`:''}
       ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
         <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}">${escHtml(u.coachNote||'')}</textarea>
@@ -4215,9 +4271,9 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND" value="${u.lastMndProteinDays!=null?u.lastMndProteinDays:''}"></div>
           <div><div class="fl" style="font-size:10px">Food log days (0–7)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND"></div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND" value="${u.lastMndFoodDays!=null?u.lastMndFoodDays:''}"></div>
           <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Guarantee status</div>
             <select class="fi" style="font-size:12px;padding:8px" id="wkGuar-${id}">
               <option value="Active" ${u.guaranteeStatus==='Active'?'selected':''}>Active</option>
@@ -4243,6 +4299,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
+        ${!isPend?`<button class="approve-btn" onclick="copyClientWeekText('${u.email}')">📋 Week text</button>`:''}
         ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="viewMember('${u.email}');setTimeout(function(){try{shareBodyChartImage()}catch(e){}},400)">📈 Chart</button>`:''}
         ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
         <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'📦 Archive'}</button>
@@ -4272,17 +4329,41 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     return true;
   }).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   if(weeklyQueue.length){
+    window._weeklyQueueEmails = weeklyQueue.map(u=>String(u.email).toLowerCase());
     html+=`<div class="card" style="margin-bottom:12px;padding:12px 14px;border-color:rgba(255,214,0,.4)">
       <div style="font-size:11px;font-weight:800;color:var(--grn);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">📨 Weekly message queue (${weeklyQueue.length})</div>
-      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Approved clients with data this week who have not had a weekly message in 5+ days. Tap to open.</div>
+      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Clients with data this week and no weekly message in 5+ days.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="approve-btn" style="padding:8px 12px;font-size:12px;background:var(--grn);color:#000;border:none" onclick="event.stopPropagation();startWeeklyBatch()">▶ Start Sunday batch</button>
+        <button class="approve-btn" style="padding:8px 12px;font-size:12px" onclick="event.stopPropagation();openWeeklyQueueClient(window._weeklyQueueEmails[0])">Open first</button>
+      </div>
       ${weeklyQueue.map(u=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #222">
         <div style="font-size:13px;font-weight:700;color:var(--wht)">${escHtml(u.name)}</div>
         <button class="approve-btn" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();openWeeklyQueueClient('${u.email}')">Open</button>
       </div>`).join('')}
     </div>`;
+  } else {
+    window._weeklyQueueEmails = [];
   }
 
   html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search clients by name or email…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
+
+  // Duplicate email hint (same email, multiple docs)
+  const emailCounts={};
+  Object.entries(d.users||{}).forEach(([id,u])=>{
+    if(!u||u.role==='admin') return;
+    const em=String(u.email||id).toLowerCase().trim();
+    if(!em) return;
+    emailCounts[em]=(emailCounts[em]||0)+1;
+  });
+  const dups=Object.entries(emailCounts).filter(([,n])=>n>1).map(([em])=>em);
+  if(dups.length){
+    html+=`<div class="card" style="margin-bottom:12px;padding:10px 12px;border-color:rgba(255,184,0,.4)">
+      <div style="font-size:12px;font-weight:700;color:var(--amb)">⚠️ Possible duplicate accounts</div>
+      <div style="font-size:11px;color:var(--gry);margin-top:4px">${dups.slice(0,5).map(e=>escHtml(e)).join(', ')} — same email on more than one user doc. Prefer one email casing going forward.</div>
+    </div>`;
+  }
+
   const q=(window._adminMemberQ||'').toLowerCase().trim();
   function matchQ(u){ if(!q) return true; return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q); }
   const pendingF=pending.filter(matchQ);
@@ -4296,14 +4377,14 @@ const renderAdmin = requireAdmin(function renderAdmin(){
 
   // Archived (collapsed by default)
   const archivedF=archived.filter(matchQ);
-  const arOpen=isAdminSectionOpen('archived', true);
+  const arOpen=q ? true : isAdminSectionOpen('archived', false);
   html+=`<div class="card" style="margin-top:16px;padding:12px 14px">
     <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleAdminSection('archived')">
-      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gry)">📦 Archived (${archivedF.length})</div>
+      <div style="font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gry)">📦 Archived (${archivedF.length})${q?' · search':''}</div>
       <span id="archivedChev" style="color:var(--grn);font-size:14px;font-weight:800">${arOpen?'▾':'›'}</span>
     </div>
     <div id="archivedBody" style="display:${arOpen?'block':'none'};margin-top:10px">
-      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Hidden from the main list. Data is kept. Restore to make them active again.</div>
+      <div style="font-size:11px;color:var(--gry);margin-bottom:8px">Only opens when you expand this or search. Restore to make them active again.</div>
       ${archivedF.length? archivedF.map((u,i)=>{
         const when=u.archivedAt?new Date(u.archivedAt).toLocaleDateString():'';
         return `<div class="mrow" style="cursor:default">
@@ -4340,13 +4421,25 @@ const approveUser = requireAdmin(async function approveUser(email){
     try{ renderAdmin(); }catch(e){}
     return;
   }
+  // Require WhatsApp phone before approve
+  const phoneCheck = (prev && prev.phone) ? String(prev.phone).trim() : '';
+  const phoneInput = document.getElementById('tgPhone-'+(email.replace(/[^a-zA-Z0-9]/g,'_')));
+  const phoneFromInput = phoneInput ? String(phoneInput.value||'').trim() : '';
+  let phoneToSave = phoneFromInput || phoneCheck;
+  if(phoneToSave && typeof normalizePhone==='function') phoneToSave = normalizePhone(phoneToSave) || phoneToSave;
+  if(!phoneToSave){
+    toast('Add WhatsApp phone before approving (open the client row)','a');
+    window._adminOpenEmail = email;
+    try{ renderAdmin(); }catch(e){}
+    return;
+  }
 
   _approvingEmail = email;
   try{
     await fdb.collection('users').doc(docId).set({
       status: 'approved',
       email: email,
-      
+      phone: phoneToSave,
       approvedAt: Date.now()
     }, {merge:true});
 
@@ -4533,9 +4626,25 @@ function stopRestTimer(){
 }
 
 // Offline banner
-window.addEventListener('online',()=>{const b=document.getElementById('offlineBanner');if(b)b.classList.remove('show');toast('Back online','g');});
-window.addEventListener('offline',()=>{const b=document.getElementById('offlineBanner');if(b)b.classList.add('show');});
+window.addEventListener('online',()=>{const b=document.getElementById('offlineBanner');if(b)b.classList.remove('show');try{updateSyncStatus(true);}catch(e){}toast('Back online','g');});
+window.addEventListener('offline',()=>{const b=document.getElementById('offlineBanner');if(b)b.classList.add('show');try{updateSyncStatus(false);}catch(e){}});
 if(typeof navigator!=='undefined'&&navigator.onLine===false){const b=document.getElementById('offlineBanner');if(b)b.classList.add('show');}
+function updateSyncStatus(online){
+  if(online==null) online = (typeof navigator==='undefined'||navigator.onLine!==false);
+  const box=document.getElementById('syncStatus');
+  const dot=document.getElementById('syncDot');
+  const lbl=document.getElementById('syncLbl');
+  if(!box) return;
+  box.style.display='flex';
+  if(online){
+    if(dot) dot.style.background='#7EE000';
+    if(lbl) lbl.textContent='Online';
+  } else {
+    if(dot) dot.style.background='#FFB800';
+    if(lbl) lbl.textContent='Offline · saves locally';
+  }
+}
+try{ updateSyncStatus(); }catch(e){}
 
 // PWA install
 let _deferredPrompt=null;
@@ -4726,6 +4835,31 @@ function applyWeeklyTemplate(email, key){
 
 function _weeklyMsgDomId(email){
   return String(email||'').replace(/[^a-zA-Z0-9]/g,'_');
+}
+function copyClientWeekText(email){
+  email=String(email||'').trim().toLowerCase();
+  const d=gDB();
+  const u=d.users[email]||Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email)||{};
+  const ci=Array.isArray(d.checkins[email])?d.checkins[email]:[];
+  const wkts=Array.isArray(d.workouts[email])?d.workouts[email]:[];
+  const c=weekLogCounts(u,ci,wkts);
+  const lines=[
+    (u.name||email)+' — this week',
+    'Weight avg: '+(c.weightAvg!=null?c.weightAvg.toFixed(1)+' kg':'—'),
+    'Waist avg: '+(c.waistAvg!=null?c.waistAvg.toFixed(1)+' in':'—'),
+    'Weigh-ins: '+c.daysWeighed+'/7',
+    'Waist logs: '+c.daysWaist+'/7',
+    'Steps target: '+c.daysStepsMet+'/7 (logged '+c.daysStepsLogged+'/7)',
+    'Water target: '+c.daysWaterMet+'/7 (logged '+c.daysWaterLogged+'/7)',
+    'Sleep logs: '+c.daysSleep+'/7',
+    'Training: '+c.workouts+' of '+c.prescribed+' ('+c.trainingPct+'%)',
+    'Guarantee: '+(u.guaranteeStatus||'—'),
+    'Program: '+((u.programId&&CACHE.programs[u.programId])?CACHE.programs[u.programId].name:'—')+(u.programStartDate?(' started '+u.programStartDate):'')
+  ];
+  const body=lines.join('\n');
+  try{ navigator.clipboard.writeText(body); toast('Week text copied','g'); }
+  catch(e){ toast('Could not copy','a'); }
+  return body;
 }
 function buildWeeklyClientMessage(email){
   email = String(email||'').trim().toLowerCase();
@@ -4962,6 +5096,22 @@ function copyWeeklyClientMessage(email){
   if(pre){ pre.style.display='block'; pre.textContent=body; }
 }
 
+function suggestGuarantee(u){
+  if(!u) return '';
+  const d=gDB();
+  const ci=Array.isArray(d.checkins[u.email])?d.checkins[u.email]:[];
+  const adh=typeof adherencePct==='function'?adherencePct(u,14):100;
+  if(adh<50 && ci.length>=3) return 'At risk';
+  if(ci.length>=2){
+    const sorted=[...ci].filter(c=>c&&c.weight!=null).sort((a,b)=>a.date.localeCompare(b.date));
+    if(sorted.length>=2){
+      const a=sorted[sorted.length-1], b=sorted[Math.max(0,sorted.length-4)];
+      if(a&&b&&(a.weight-b.weight)>=1.5) return 'At risk';
+    }
+  }
+  if(adh>=70 && ci.length>=5) return 'On track';
+  return '';
+}
 async function saveGuaranteeStatus(email, status){
   if(!CU||CU.role!=='admin')return;
   email=String(email||'').trim().toLowerCase();
@@ -4987,6 +5137,35 @@ async function markWeeklyMessageSent(email){
     });
   }catch(e){ console.warn('lastWeeklyMessageAt', e); }
 }
+
+function startWeeklyBatch(){
+  const q = window._weeklyQueueEmails || [];
+  if(!q.length){ toast('Queue is empty','a'); return; }
+  window._weeklyBatchMode = true;
+  openWeeklyQueueClient(q[0]);
+  setTimeout(function(){
+    try{ previewWeeklyClientMessage(q[0]); }catch(e){}
+    toast('Batch mode: preview → Send WhatsApp → next client','g');
+  }, 200);
+}
+function advanceWeeklyBatch(justSentEmail){
+  const q = window._weeklyQueueEmails || [];
+  const cur = String(justSentEmail||'').toLowerCase();
+  const idx = q.indexOf(cur);
+  const next = idx>=0 ? q[idx+1] : q[0];
+  if(!next){
+    window._weeklyBatchMode = false;
+    toast('Sunday batch complete','g');
+    try{ renderAdmin(); }catch(e){}
+    return;
+  }
+  openWeeklyQueueClient(next);
+  setTimeout(function(){
+    try{ previewWeeklyClientMessage(next); }catch(e){}
+    toast('Next: '+next,'g');
+  }, 250);
+}
+
 function openWeeklyQueueClient(email){
   window._adminOpenEmail = String(email||'').toLowerCase();
   try{ renderAdmin(); }catch(e){}
@@ -5004,8 +5183,29 @@ function sendWeeklyClientMessage(email){
   const id = _weeklyMsgDomId(email);
   const pre = document.getElementById('wkPreview-'+id);
   if(pre){ pre.style.display='block'; pre.textContent=body; }
+  // Remember MyNetDiary numbers for next week
+  try{
+    const id = _weeklyMsgDomId(email);
+    const proEl = document.getElementById('wkPro-'+id);
+    const foodEl = document.getElementById('wkFood-'+id);
+    const pro = proEl && proEl.value !== '' ? Number(proEl.value) : null;
+    const food = foodEl && foodEl.value !== '' ? Number(foodEl.value) : null;
+    const payload = {};
+    if(pro!=null && !isNaN(pro)) payload.lastMndProteinDays = pro;
+    if(food!=null && !isNaN(food)) payload.lastMndFoodDays = food;
+    if(Object.keys(payload).length){
+      fdb.collection('users').doc(email).set(payload,{merge:true}).catch(()=>{});
+      if(CACHE.users[email]) Object.assign(CACHE.users[email], payload);
+    }
+  }catch(e){}
   const ok = openWhatsAppTo(u.phone, body);
   try{ markWeeklyMessageSent(email); }catch(e){}
+  // Sunday batch: advance to next in queue after send
+  try{
+    if(window._weeklyBatchMode){
+      setTimeout(function(){ advanceWeeklyBatch(email); }, 400);
+    }
+  }catch(e){}
   if(!ok) toast('Message copied — allow pop-ups or paste into WhatsApp','a');
   else toast(u.phone ? 'WhatsApp opened with weekly update' : 'WhatsApp opened — pick the client (no phone on file)','g');
 }
