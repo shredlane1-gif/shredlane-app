@@ -535,14 +535,10 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <button class="b-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="dismissPWA()">✕</button>
 </div>
 <div id="restTimer" aria-live="polite">
-  <div style="font-size:10px;font-weight:800;color:var(--gry);letter-spacing:.08em;text-transform:uppercase">Rest</div>
+  <div style="font-size:10px;font-weight:800;color:var(--gry);letter-spacing:.08em;text-transform:uppercase" id="restTimerLabel">Rest</div>
   <div class="rt-time" id="restTimerDisplay">2:30</div>
   <div class="rt-btns">
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(90)">90s</button>
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(120)">2m</button>
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="startRestTimer(150)">2:30</button>
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="extendRestTimer(30)">+30s</button>
-    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="stopRestTimer()">✕</button>
+    <button class="b-secondary" style="padding:6px 10px;font-size:11px;width:auto" onclick="stopRestTimer()">Skip</button>
   </div>
 </div>
 
@@ -2390,10 +2386,6 @@ function renderExerciseBuilder(){
           <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
           <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Saved — tap to undo':'Tap ✓ to save this set'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
         </div>`).join('')}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-        <button class="add-set-btn" onclick="addSet(${ei});startRestTimer(150)">＋ Add Set · Rest 2:30</button>
-        <button class="add-set-btn" style="color:var(--gry)" onclick="startRestTimer(150)">⏱ Rest 2:30</button>
-      </div>
     </div>`;
   }).join('');
 }
@@ -2448,7 +2440,7 @@ function toggleSetDone(ei, si){
       return;
     }
     s.done = true;
-    try{ startRestTimer(150); }catch(e){}
+    try{ startRestForExercise(ex.name||''); }catch(e){}
     renderExerciseBuilder();
     saveWorkoutProgress(true);
   } else {
@@ -4590,39 +4582,86 @@ function csvEscape(v){
 // CLIENT UX PACK — reminders, rest timer, PWA, offline, share, etc.
 // ═══════════════════════════════════════
 let _restInterval=null,_restLeft=0;
-function extendRestTimer(secs){
-  secs=secs||30;
-  if(typeof _restLeft==='undefined'||_restLeft<=0){ startRestTimer(secs); return; }
-  _restLeft += secs;
-  const disp=document.getElementById('restTimerDisplay');
-  if(disp){ const m=Math.floor(_restLeft/60),s=_restLeft%60; disp.textContent=m+':'+String(s).padStart(2,'0'); }
-  toast('+'+secs+'s rest','g');
+/** Compound → 150s (2:30). Isolation → 60s (1:00). */
+function isCompoundExercise(name){
+  const n = String(name||'').toLowerCase();
+  if(!n.trim()) return true; // default compound when unknown
+  // Isolation keywords first (more specific)
+  const iso = ['curl','extension','raise','fly','flies','lateral','rear delt','shrug','calf','kickback','concentration','preacher','pullover','wrist','forearm','ab ','abs','crunch','plank','leg curl','leg extension','tricep','bicep','isolation'];
+  if(iso.some(k=>n.indexOf(k)>=0)) return false;
+  const compound = ['squat','deadlift','bench','press','row','pull-up','pullup','chin-up','chinup','clean','snatch','lunge','thrust','dip','rdl','romanian','good morning','hip hinge','push-up','pushup','pull over','thruster','jerk','swing','farmer'];
+  if(compound.some(k=>n.indexOf(k)>=0)) return true;
+  return true; // safer default: longer rest
+}
+function restSecondsForExercise(name){
+  return isCompoundExercise(name) ? 150 : 60;
+}
+function startRestForExercise(exName){
+  // Unlock audio on this user gesture so the end alarm can play
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx){
+      playRestAlarm._ctx = playRestAlarm._ctx || new Ctx();
+      if(playRestAlarm._ctx.state === 'suspended') playRestAlarm._ctx.resume();
+    }
+  }catch(e){}
+  const secs = restSecondsForExercise(exName);
+  const label = document.getElementById('restTimerLabel');
+  if(label) label.textContent = isCompoundExercise(exName) ? 'Rest · compound 2:30' : 'Rest · isolation 1:00';
+  startRestTimer(secs);
+}
+function playRestAlarm(){
+  // Loud multi-beep via Web Audio (no external file needed)
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    const ctx = playRestAlarm._ctx || (playRestAlarm._ctx = new Ctx());
+    if(ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    // Three strong beeps
+    [0, 0.35, 0.7].forEach(function(delay, i){
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = i===2 ? 980 : 880;
+      gain.gain.setValueAtTime(0.0001, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.55, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.3);
+    });
+  }catch(e){ console.warn('rest alarm audio', e); }
+  try{
+    if(navigator.vibrate) navigator.vibrate([300,120,300,120,400]);
+  }catch(e){}
 }
 function startRestTimer(secs){
-  secs=secs||150;
-  _restLeft=secs;
-  const box=document.getElementById('restTimer');
-  const disp=document.getElementById('restTimerDisplay');
-  if(box)box.classList.add('show');
+  secs = secs || 150;
+  _restLeft = secs;
+  const box = document.getElementById('restTimer');
+  const disp = document.getElementById('restTimerDisplay');
+  if(box) box.classList.add('show');
   function tick(){
-    const m=Math.floor(_restLeft/60),s=_restLeft%60;
-    if(disp)disp.textContent=m+':'+String(s).padStart(2,'0');
+    const m = Math.floor(_restLeft/60), s = _restLeft%60;
+    if(disp) disp.textContent = m+':'+String(s).padStart(2,'0');
     if(_restLeft<=0){
       stopRestTimer();
-      try{if(navigator.vibrate)navigator.vibrate([200,100,200]);}catch(e){}
-      toast('⏱ Rest done — next set!','g');
+      playRestAlarm();
+      toast('⏱ Rest done — next set','g');
       return;
     }
     _restLeft--;
   }
   clearInterval(_restInterval);
   tick();
-  _restInterval=setInterval(tick,1000);
+  _restInterval = setInterval(tick, 1000);
 }
 function stopRestTimer(){
-  clearInterval(_restInterval);_restInterval=null;
+  clearInterval(_restInterval); _restInterval=null;
   const box=document.getElementById('restTimer');
-  if(box)box.classList.remove('show');
+  if(box) box.classList.remove('show');
 }
 
 // Offline banner
