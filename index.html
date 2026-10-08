@@ -4796,22 +4796,15 @@ function enableReminders(){
 // WhatsApp coach link
 
 function getAppShareLink(){
-  try{
-    // Clean URL without hash for clients
-    const u = new URL(window.location.href);
-    u.hash = '';
-    u.search = '';
-    return u.toString().replace(/\/$/,'') || window.location.origin;
-  }catch(e){
-    return window.location.origin || window.location.href;
-  }
+  // Canonical client link (GitHub Pages)
+  return 'https://shredlane1-gif.github.io/shredlane-app/';
 }
 function refreshAdminAppLink(){
   const el = document.getElementById('adminAppLink');
   if(!el) return;
   const link = getAppShareLink();
   el.textContent = link;
-  el.href = link;
+  el.setAttribute('href', link);
 }
 function copyAppLink(){
   const link = getAppShareLink();
@@ -4826,7 +4819,13 @@ function copyAppLink(){
 function shareAppLinkWhatsApp(){
   const link = getAppShareLink();
   refreshAdminAppLink();
-  const body = 'Hi! Join me on Shredlane (your training & check-in app):\\n\\n'+link+'\\n\\nOpen the link, create your account, and wait for coach approval.';
+  const body = [
+    'Hi! Join me on Shredlane — your training and check-in app.',
+    '',
+    link,
+    '',
+    'Open the link, create your account, then wait for coach approval.'
+  ].join('\n');
   try{ navigator.clipboard.writeText(body); }catch(e){}
   window.open('https://wa.me/?text='+encodeURIComponent(body), '_blank');
   toast('WhatsApp opened with invite message','g');
