@@ -624,7 +624,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="field"><label>Password</label><input class="fi" type="password" id="lPw" placeholder="Your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="a-btn" onclick="doLogin()">Login →</button>
       <div class="a-err" id="lErr"></div>
-      <div class="a-note">Forgot password? Contact: shredlane1@gmail.com or +254 705 671 119</div>
+      <div class="a-note">Forgot password? <a href="#" onclick="requestPasswordResetWhatsApp();return false;" style="color:var(--grn);font-weight:700">Message coach on WhatsApp</a></div>
     </div>
 
     <!-- REGISTER -->
@@ -2596,6 +2596,37 @@ function allTimePRs(workouts){
 }
 
 let _savingWorkout=false;
+function workoutIncompleteSummary(){
+  const issues = [];
+  let emptyExercises = 0, emptySets = 0, partialSets = 0;
+  (wktBuilder.exercises||[]).forEach(ex=>{
+    const name = (ex.name||'').trim() || 'Exercise';
+    const sets = ex.sets||[];
+    if(!sets.length){ emptyExercises++; issues.push(name+': no sets'); return; }
+    let anyDone = false, anyData = false;
+    sets.forEach(s=>{
+      const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+      if(hasReps || hasWt || s.done) anyData = true;
+      if(s.done && (hasReps || hasWt)) anyDone = true;
+      if((hasReps || hasWt) && !s.done) partialSets++;
+      if(!hasReps && !hasWt && !s.done) emptySets++;
+    });
+    if(!anyData){ emptyExercises++; issues.push(name+': not started'); }
+    else if(!anyDone && partialSets===0){ /* has data via auto path */ }
+  });
+  // Count planned sets with no reps/weight
+  let plannedMissing = 0;
+  (wktBuilder.exercises||[]).forEach(ex=>{
+    (ex.sets||[]).forEach(s=>{
+      const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+      if(!hasReps && !hasWt) plannedMissing++;
+    });
+  });
+  return { emptyExercises, emptySets, partialSets, plannedMissing, issues };
+}
+
 async function saveWorkout(){
   if(!CU)return;
   if(_savingWorkout){ toast('Saving… please wait','a'); return; }
@@ -2603,6 +2634,23 @@ async function saveWorkout(){
   const u=VIEWUSER||CU;
   const title=document.getElementById('wktTitleIn').value.trim();
   const d=document.getElementById('wktDateIn').value||today();
+  // Confirm if session looks incomplete
+  try{
+    const sum = workoutIncompleteSummary();
+    const incomplete = sum.plannedMissing>0 || sum.emptyExercises>0;
+    if(incomplete){
+      const bits = [];
+      if(sum.plannedMissing>0) bits.push(sum.plannedMissing+' set(s) still empty');
+      if(sum.emptyExercises>0) bits.push(sum.emptyExercises+' exercise(s) not started');
+      const msg = 'Finish session with incomplete work?
+
+'+bits.join('
+')+'
+
+Only filled sets will be saved. Continue?';
+      if(!confirm(msg)) return;
+    }
+  }catch(e){}
   // Auto-tick filled sets so Finish session never drops unticked work
   let autoTicked = 0;
   (wktBuilder.exercises||[]).forEach(ex=>{
@@ -4542,15 +4590,73 @@ const restoreUser = requireAdmin(async function restoreUser(email){
   }
 });
 
+function requestPasswordResetWhatsApp(){
+  const emEl = document.getElementById('lPw') && document.getElementById('lPw').form
+    ? null : document.querySelector('#lPw');
+  // Prefer email field on login if present
+  let em = '';
+  try{
+    const byId = document.getElementById('lEm') || document.getElementById('lEmail');
+    if(byId && byId.value) em = byId.value.trim();
+  }catch(e){}
+  const lines = [
+    'Hi coach, I need a Shredlane password reset.',
+    em ? ('My email: '+em) : 'My email: (please fill)',
+    '',
+    'Please send me a new temporary password on WhatsApp.'
+  ];
+  const body = lines.join('\n');
+  try{ openWhatsAppTo('254705671119', body); }catch(e){
+    window.open('https://wa.me/254705671119?text='+encodeURIComponent(body),'_blank');
+  }
+  toast('WhatsApp opened — message your coach for a reset','g');
+}
+
+function generateTempPassword(){
+  const n = String(Math.floor(1000 + Math.random()*9000));
+  return 'Shred'+n;
+}
+
 async function resetPassword(email){
   if(!CU||CU.role!=='admin')return;
-  try{
-    await firebase.auth().sendPasswordResetEmail(email);
-    toast('📧 Password reset email sent to '+email,'g');
-  }catch(e){
-    console.error(e);
-    toast('⚠️ Could not send reset email — check connection','r');
+  email = String(email||'').trim().toLowerCase();
+  const d = gDB();
+  const u = d.users[email] || Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email) || {};
+  const phone = u.phone || '';
+  const name = (u.name||'there').split(' ')[0];
+  if(!phone){
+    toast('Add their WhatsApp number first, then try Reset PW','a');
+    window._adminOpenEmail = email;
+    try{ renderAdmin(); }catch(e){}
+    return;
   }
+  const temp = generateTempPassword();
+  const ok = confirm(
+    'Send password reset to '+name+' on WhatsApp?\n\n'+
+    'Temporary password will be:\n'+temp+'\n\n'+
+    'You must set this same password for their account in Firebase Console:\n'+
+    'Authentication → Users → find '+email+' → reset password\n\n'+
+    'Continue?'
+  );
+  if(!ok) return;
+  const appLink = (typeof getAppShareLink==='function') ? getAppShareLink() : 'https://shredlane1-gif.github.io/shredlane-app/';
+  const body = [
+    'Hi '+name+',',
+    '',
+    'Your Shredlane password has been reset by your coach.',
+    '',
+    'App: '+appLink,
+    'Email: '+email,
+    'Temporary password: '+temp,
+    '',
+    'Log in with that password, then tap the lock icon in the app to choose your own.',
+    '',
+    '— Shredlane coach'
+  ].join('\n');
+  try{ navigator.clipboard.writeText(temp); }catch(e){}
+  const opened = openWhatsAppTo(phone, body);
+  if(opened) toast('WhatsApp opened · temp password copied: '+temp,'g');
+  else toast('Message copied. Temp password: '+temp+' — set it in Firebase for their email','a');
 }
 
 // ═══════════════════════════════════════
