@@ -3642,7 +3642,7 @@ function renderNextSessionDash(u, wkts){
     const cont=document.getElementById('dashContent');
     if(cont) cont.insertBefore(el, cont.firstChild);
   }
-  if(!u||VIEWUSER||!u.programId){ el.style.display='none'; return; }
+  if(!u||!u.programId){ el.style.display='none'; return; }
   const next=typeof nextProgramSession==='function'?nextProgramSession(u, wkts||[]):null;
   if(!next||!next.day){ el.style.display='none'; return; }
   const day=next.day;
@@ -3652,7 +3652,7 @@ function renderNextSessionDash(u, wkts){
     <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em">Next session</div>
     <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:#FFD600;margin:2px 0 6px">${escHtml(day.name||('Day '+(next.index+1)))}</div>
     ${names.length?`<div style="font-size:12px;color:var(--gry);line-height:1.4">${names.map(n=>escHtml(n)).join(' · ')}${(day.exercises||[]).length>6?' …':''}</div>`:''}
-    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Open Train</button>
+    ${!VIEWUSER?`<button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Open Train</button>`:''}
   </div>`;
 }
 function renderTodayJobs(u, ci){
@@ -3736,12 +3736,20 @@ function renderDash(){
 
   const ci=myCI();
   const wkts=myWorkouts();
-  try{ renderTodayJobs(u, ci); }catch(e){}
-  try{ renderMissedDayNudge(u, ci); }catch(e){}
+  if(!VIEWUSER){
+    try{ renderTodayJobs(u, ci); }catch(e){}
+    try{ renderMissedDayNudge(u, ci); }catch(e){}
+    try{ renderRemindPrompt(u); }catch(e){}
+    try{ renderClientAlerts(u, ci); }catch(e){}
+    try{ renderGoalProgress(u, ci); }catch(e){}
+  } else {
+    // Coach view: hide client-only chrome
+    ['dashTodayJobs','dashMissedNudge','dashQuickActions'].forEach(function(id){
+      const el=document.getElementById(id); if(el){ el.style.display='none'; el.innerHTML=''; }
+    });
+    const gp=document.getElementById('goalProgressWrap'); if(gp) gp.style.display='none';
+  }
   try{ renderNextSessionDash(u, wkts); }catch(e){}
-  try{ renderRemindPrompt(u); }catch(e){}
-  try{ renderClientAlerts(u, ci); }catch(e){}
-  try{ renderGoalProgress(u, ci); }catch(e){}
 
   // ── Onboarding checklist (first ~2 weeks / sparse data) ──
   const ob=document.getElementById('onboardWrap');
@@ -4230,18 +4238,11 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             ? ' <span class="inactive-badge" style="background:rgba(126,224,0,.15);color:var(--grn)">'+escHtml(guar)+'</span>'
             : ''));
       const prog = (u.programId && CACHE.programs && CACHE.programs[u.programId]) ? CACHE.programs[u.programId] : null;
-      const progBit = prog ? (prog.name+(u.programStartDate?(' · started '+u.programStartDate):'')) : 'No program';
-      const lastWk = u.lastWeeklyMessageAt ? (function(ts){
-        const d=Math.floor((Date.now()-ts)/86400000);
-        if(d<=0) return 'weekly msg today';
-        if(d===1) return 'weekly msg yesterday';
-        return 'weekly msg '+d+'d ago';
-      })(u.lastWeeklyMessageAt) : 'no weekly msg yet';
-      const tip=isPend?'Pending approval':(ago+' · '+meta.ci.length+' CI · '+meta.adh+'% · '+progBit+' · '+lastWk);
+      const tip = isPend ? 'Pending approval' : (ago+' · '+meta.adh+'% adh'+(prog ? ' · '+prog.name : ''));
       return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
         <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
         <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}${guarBadge}</div>
-        <div class="mrow-meta">${escHtml(u.email)} · ${escHtml(tip)}</div></div>
+        <div class="mrow-meta">${escHtml(tip)}</div></div>
         <span class="bdg ${isPend?'bdg-pend':meta.ci.length?'bdg-on':'bdg-off'}">${isPend?'Pending':meta.ci.length?'Active':'Approved'}</span>
         <span class="mrow-chev">${open?'▾':'›'}</span>
       </div>${open?memberDetail(u,i):''}`;
@@ -4253,99 +4254,101 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     const isPend=normalizeStatus(u.status)==='pending';
     const id=u.email.replace(/[^a-zA-Z0-9]/g,'_');
     const progOptions=(typeof allPrograms==='function'?allPrograms():[]).map(p=>`<option value="${p.id}" ${u.programId===p.id?'selected':''}>${escHtml(p.name)}</option>`).join('');
-    const wDiff=last&&u.baseWeight!=null?(last.weight-u.baseWeight).toFixed(1):null;
-    return `<div class="mc" id="adminMemberDetail" style="margin-bottom:12px;border-color:rgba(255,214,0,.35)" onclick="event.stopPropagation()">
-      <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Joined ${escHtml(u.joined)||'—'} · ${escHtml(u.goal)||'—'}</div>
-      ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">📱 WhatsApp phone</div>
-        <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
-        <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientPhone('${u.email}')">Save</button></div></div>`:''}
-      ${!isPend?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--gry);font-weight:600">📋 Program</span>
-        <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)"><option value="">— None —</option>${progOptions}</select>
-        ${u.programStartDate?`<span style="font-size:11px;color:var(--gry)">Started ${escHtml(u.programStartDate)}</span>`:''}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--gry);font-weight:600">🛡 Guarantee</span>
-        <select class="prog-select-sm" id="guarFlag-${id}" onchange="saveGuaranteeStatus('${u.email}',this.value)">
-          <option value="" ${!(u.guaranteeStatus)?'selected':''}>— Not set —</option>
-          <option value="Active" ${u.guaranteeStatus==='Active'?'selected':''}>Active</option>
-          <option value="On track" ${u.guaranteeStatus==='On track'?'selected':''}>On track</option>
-          <option value="At risk" ${u.guaranteeStatus==='At risk'?'selected':''}>At risk</option>
-          <option value="Paused" ${u.guaranteeStatus==='Paused'?'selected':''}>Paused</option>
-          <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID, reset needed</option>
-        </select>
-        ${u.lastWeeklyMessageAt?`<span style="font-size:11px;color:var(--gry)">Last weekly: ${new Date(u.lastWeeklyMessageAt).toLocaleDateString()}</span>`:'<span style="font-size:11px;color:var(--amb)">No weekly message sent yet</span>'}
-        ${(()=>{ const h=suggestGuarantee(u); return h?`<div style="width:100%;font-size:11px;color:var(--amb);margin-top:4px">💡 App suggests: <strong>${escHtml(h)}</strong> — change the dropdown if you agree</div>`:''; })()}
-      </div>`:''}
-      ${!isPend?`<div style="margin-bottom:8px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">💬 Coach note</div>
-        <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="cn-${id}">${escHtml(u.coachNote||'')}</textarea>
-        <button class="approve-btn" style="margin-top:6px;padding:6px 12px;font-size:11px" onclick="saveCoachNote('${u.email}')">Save note</button>
-        ${u.coachNoteAt?`<div style="font-size:10px;color:var(--gry);margin-top:4px">Saved ${new Date(u.coachNoteAt).toLocaleDateString()}</div>`:''}
-      </div>`:''}
-      ${!isPend?`<div style="margin-bottom:10px;padding-top:8px;border-top:1px solid var(--bdr)">
-        <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">🎯 Daily targets</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
-          <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
-          <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
-          <div><div class="fl" style="font-size:10px">Waist unit</div>
-            <select class="fi" style="font-size:12px;padding:8px" id="tgU-${id}" disabled><option value="in" selected>Inches only</option></select>
-          </div>
+    // Snapshot line
+    let snap = meta.adh+'% adherence (14d)';
+    try{
+      const win = typeof bodyWinLine==='function' ? bodyWinLine(u, ci) : '';
+      if(win) snap += ' · '+win;
+    }catch(e){}
+    if(last) snap += ' · last log '+last.date;
+    else snap += ' · no check-ins yet';
+    const guarHint = (typeof suggestGuarantee==='function') ? suggestGuarantee(u) : '';
+
+    if(isPend){
+      return `<div class="mc" id="adminMemberDetail" style="margin-bottom:12px;border-color:rgba(255,214,0,.35)" onclick="event.stopPropagation()">
+        <div style="font-size:13px;color:var(--gry);margin-bottom:10px">${escHtml(u.email)}</div>
+        <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">WhatsApp</div>
+          <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
+          <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientPhone('${u.email}')">Save</button></div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>
+          <button class="reject-btn" onclick="rejectUser('${u.email}')">❌ Decline</button>
         </div>
-        <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
-      </div>`:''}
-      ${!isPend?`<div style="margin-bottom:10px;padding:10px;border:1px solid rgba(255,214,0,.25);border-radius:10px;background:rgba(255,214,0,.04)">
-        <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:6px;letter-spacing:.04em;text-transform:uppercase">📨 Weekly update message</div>
-        <div style="font-size:11px;color:var(--gry);margin-bottom:8px">App picks the main focus from the data automatically. Your note is optional extra feedback (does not replace the app focus). Add MyNetDiary numbers when you have them.</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','strong')">Strong week</button>
-          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','water')">Focus water</button>
-          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','steps')">Focus steps</button>
-          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','train')">Focus training</button>
-          <button type="button" class="approve-btn" style="padding:5px 10px;font-size:10px" onclick="applyWeeklyTemplate('${u.email}','photos')">Photos due</button>
-        </div>
+      </div>`;
+    }
+
+    return `<div class="mc" id="adminMemberDetail" style="margin-bottom:12px;border-color:rgba(255,214,0,.35);padding:14px" onclick="event.stopPropagation()">
+      <!-- 1. Snapshot -->
+      <div style="font-size:13px;font-weight:600;color:var(--wht);line-height:1.45;margin-bottom:12px">${escHtml(snap)}</div>
+
+      <!-- 2. Weekly message (primary job) -->
+      <div style="padding:12px;border:1px solid rgba(255,214,0,.3);border-radius:10px;background:rgba(255,214,0,.04);margin-bottom:12px">
+        <div style="font-size:11px;font-weight:800;color:var(--grn);margin-bottom:8px;letter-spacing:.04em;text-transform:uppercase">Weekly message</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><div class="fl" style="font-size:10px">Protein days hit (0–7)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="from MND" value="${u.lastMndProteinDays!=null?u.lastMndProteinDays:''}"></div>
-          <div><div class="fl" style="font-size:10px">Food log days (0–7)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="from MND" value="${u.lastMndFoodDays!=null?u.lastMndFoodDays:''}"></div>
-          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Guarantee status</div>
-            <select class="fi" style="font-size:12px;padding:8px" id="wkGuar-${id}">
+          <div><div class="fl" style="font-size:10px">Protein days (MND)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="0–7" value="${u.lastMndProteinDays!=null?u.lastMndProteinDays:''}"></div>
+          <div><div class="fl" style="font-size:10px">Food log days (MND)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="0–7" value="${u.lastMndFoodDays!=null?u.lastMndFoodDays:''}"></div>
+        </div>
+        <div style="margin-bottom:8px"><div class="fl" style="font-size:10px">Optional note from you</div>
+          <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="wkNote-${id}" placeholder="Extra feedback (optional)">${escHtml(u.coachNote||'')}</textarea></div>
+        <input type="hidden" id="wkGuar-${id}" value="${escHtml(u.guaranteeStatus||'')}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="approve-btn" style="padding:10px 16px;font-size:13px;background:var(--grn);color:#000;border:none;font-weight:800" onclick="sendWeeklyClientMessage('${u.email}')">📲 Send WhatsApp</button>
+          <button type="button" class="approve-btn" style="padding:8px 12px;font-size:11px;background:transparent" onclick="previewWeeklyClientMessage('${u.email}')">Preview</button>
+          <button type="button" class="approve-btn" style="padding:8px 12px;font-size:11px;background:transparent" onclick="copyWeeklyClientMessage('${u.email}')">Copy</button>
+        </div>
+        <div id="wkAutoFocus-${id}" style="margin-top:8px;font-size:11px;color:var(--gry);line-height:1.4"></div>
+        <pre id="wkPreview-${id}" style="display:none;margin:10px 0 0;padding:10px;background:#000;border-radius:8px;font-size:11px;color:var(--txt);white-space:pre-wrap;font-family:Barlow,sans-serif;line-height:1.45"></pre>
+      </div>
+
+      <!-- 3. Primary actions -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="approve-btn" onclick="viewMember('${u.email}')">Dashboard</button>
+        <button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">Train</button>
+        <button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">Photos</button>
+      </div>
+
+      <!-- 4. Settings (collapsed) -->
+      <details style="margin-top:4px;border-top:1px solid var(--bdr);padding-top:10px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--gry);list-style:none;user-select:none">Settings & more ▾</summary>
+        <div style="margin-top:12px">
+          <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">WhatsApp</div>
+            <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
+            <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientPhone('${u.email}')">Save</button></div></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--gry);font-weight:600">Program</span>
+            <select class="prog-select-sm" onchange="assignProgramToUser('${u.email}',this.value||null)"><option value="">— None —</option>${progOptions}</select>
+            ${u.programStartDate?`<span style="font-size:11px;color:var(--gry)">Started ${escHtml(u.programStartDate)}</span>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--gry);font-weight:600">Guarantee</span>
+            <select class="prog-select-sm" id="guarFlag-${id}" onchange="saveGuaranteeStatus('${u.email}',this.value)">
+              <option value="" ${!(u.guaranteeStatus)?'selected':''}>— Not set —</option>
               <option value="Active" ${u.guaranteeStatus==='Active'?'selected':''}>Active</option>
               <option value="On track" ${u.guaranteeStatus==='On track'?'selected':''}>On track</option>
               <option value="At risk" ${u.guaranteeStatus==='At risk'?'selected':''}>At risk</option>
               <option value="Paused" ${u.guaranteeStatus==='Paused'?'selected':''}>Paused</option>
-              <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID, reset needed</option>
-              <option value="" ${!u.guaranteeStatus?'selected':''}>— skip —</option>
-            </select></div>
-          <div style="grid-column:1/-1"><div class="fl" style="font-size:10px">Your extra feedback (optional)</div>
-            <input class="fi" style="font-size:12px;padding:8px" id="wkNote-${id}" placeholder="optional — app already sets focus"></div>
+              <option value="VOID, reset needed" ${u.guaranteeStatus==='VOID, reset needed'||u.guaranteeStatus==='VOID'?'selected':''}>VOID</option>
+            </select>
+            ${guarHint?`<span style="font-size:11px;color:var(--amb)">Suggests ${escHtml(guarHint)}</span>`:''}
+          </div>
+          <div style="margin-bottom:10px">
+            <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">Targets</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
+              <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
+              <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
+            </div>
+            <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button class="approve-btn" style="padding:6px 10px;font-size:11px;background:transparent" onclick="copyClientWeekText('${u.email}')">Week text</button>
+            <button class="approve-btn" style="padding:6px 10px;font-size:11px;background:transparent" onclick="resetPassword('${u.email}')">Password reset</button>
+            <button class="reject-btn" style="padding:6px 10px;font-size:11px" onclick="rejectUser('${u.email}')">Archive</button>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="approve-btn" style="padding:8px 12px;font-size:11px;border-color:var(--grn);color:var(--grn)" onclick="previewWeeklyClientMessage('${u.email}')">👁 Preview</button>
-          <button class="approve-btn" style="padding:8px 12px;font-size:11px;background:var(--grn);color:#000;border:none" onclick="sendWeeklyClientMessage('${u.email}')">📲 Send WhatsApp</button>
-          <button class="approve-btn" style="padding:8px 12px;font-size:11px" onclick="copyWeeklyClientMessage('${u.email}')">📋 Copy only</button>
-        </div>
-        <div id="wkAutoFocus-${id}" style="margin-top:8px;font-size:11px;color:var(--gry);line-height:1.4"></div>
-        <pre id="wkPreview-${id}" style="display:none;margin:10px 0 0;padding:10px;background:#000;border-radius:8px;font-size:11px;color:var(--txt);white-space:pre-wrap;font-family:Barlow,sans-serif;line-height:1.45"></pre>
-      </div>`:''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-        ${isPend?`<button class="approve-btn" onclick="approveUser('${u.email}')">✅ Approve</button>`:''}
-        ${!isPend?`<button class="approve-btn" onclick="viewMember('${u.email}')">📊 Dashboard</button>`:''}
-        ${!isPend?`<button class="approve-btn" onclick="viewMemberAs('${u.email}','workouts')">🏋️ Train</button>`:''}
-        ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
-        ${!isPend?`<button class="approve-btn" onclick="copyClientWeekText('${u.email}')">📋 Week text</button>`:''}
-        ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="viewMember('${u.email}');setTimeout(function(){try{shareBodyChartImage()}catch(e){}},400)">📈 Chart</button>`:''}
-        ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Email reset + WhatsApp</button>`:''}
-        <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'📦 Archive'}</button>
-      </div>
-      ${!isPend?`<div class="mc-stats">
-        <div class="mcs"><div class="mcsv">${ci.length}</div><div class="mcsl">Check-ins</div></div>
-        <div class="mcs"><div class="mcsv" style="color:var(--grn)">${streak}</div><div class="mcsl">Streak</div></div>
-        <div class="mcs"><div class="mcsv">${ci.filter(c=>(c.steps||0)>=10000).length}</div><div class="mcsl">10K Days</div></div>
-        <div class="mcs"><div class="mcsv">${meta.adh}%</div><div class="mcsl">Adh 14d</div></div>
-      </div>`:''}
-      ${last&&!isPend?`<div class="mc-last">Last: ${escHtml(last.date)} · Wt: ${last.weight}kg · Steps: ${(last.steps||0).toLocaleString()}${last.water!=null?' · Water: '+(typeof formatWater==='function'?formatWater(waterToMl(last.water)):last.water):''}</div>`:''}
+      </details>
     </div>`;
   }
 
