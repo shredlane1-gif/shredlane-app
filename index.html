@@ -4620,26 +4620,25 @@ async function resetPassword(email){
   email = String(email||'').trim().toLowerCase();
   const d = gDB();
   const u = d.users[email] || Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email) || {};
-  const phone = u.phone || '';
+  // Prefer phone on file; also try open detail input if coach just typed it
+  let phone = u.phone || '';
+  try{
+    const id = email.replace(/[^a-zA-Z0-9]/g,'_');
+    const el = document.getElementById('tgPhone-'+id);
+    if(el && el.value && el.value.trim()) phone = el.value.trim();
+  }catch(e){}
   const name = (u.name||'there').split(' ')[0];
   const appLink = (typeof getAppShareLink==='function') ? getAppShareLink() : 'https://shredlane1-gif.github.io/shredlane-app/';
 
-  const ok = confirm(
-    'Send password reset for '+name+'?\n\n'+
-    'They will get a Firebase email with a reset link.\n'+
-    (phone ? 'WhatsApp will open with step-by-step instructions.\n' : 'Add WhatsApp number to guide them on chat.\n')+
-    '\nContinue?'
-  );
-  if(!ok) return;
-
-  let emailSent = false;
-  try{
-    await firebase.auth().sendPasswordResetEmail(email);
-    emailSent = true;
-  }catch(e){
-    console.error(e);
-    toast('Firebase could not send reset email — check the address','r');
+  if(!phone){
+    toast('Add their WhatsApp number in the client row, Save, then try again','a');
+    window._adminOpenEmail = email;
+    try{ renderAdmin(); }catch(e){}
+    return;
   }
+
+  const ok = confirm('Send password reset for '+name+'?\n\nReset email will be sent.\nWhatsApp will open with instructions.\n\nContinue?');
+  if(!ok) return;
 
   const body = [
     'Hi '+name+',',
@@ -4655,31 +4654,37 @@ async function resetPassword(email){
     '   (also check Spam, Junk, or Promotions)',
     '',
     '3. Tap the link in that email',
-    '   (it says something like Reset password or Reset your password)',
+    '   (it says Reset password)',
     '',
     '4. Type your NEW password twice and save',
     '',
-    '5. Open the app and log in with:',
-    '   Email: '+email,
-    '   Password: the new one you just chose',
+    '5. Open the app and log in with your new password',
     '',
-    'App link:',
+    'App:',
     appLink,
     '',
-    'If you cannot find the email, reply here and your coach will resend it.',
+    'If you cannot find the email, reply here.',
     '',
     '— Shredlane coach'
   ].join('\n');
 
-  if(phone){
-    try{ openWhatsAppTo(phone, body); }catch(e){}
-    toast(emailSent ? 'Reset email sent · WhatsApp guide opened' : 'WhatsApp guide opened — email may have failed','g');
-  } else {
-    try{ navigator.clipboard.writeText(body); }catch(e){}
-    toast(emailSent ? 'Reset email sent. Add WhatsApp to send them the guide next time.' : 'No phone on file and email failed','a');
-    window._adminOpenEmail = email;
-    try{ renderAdmin(); }catch(e){}
+  // Open WhatsApp FIRST (same user-gesture tick) so browsers do not block it
+  let waOk = false;
+  try{ waOk = openWhatsAppTo(phone, body); }catch(e){ console.error(e); }
+
+  let emailSent = false;
+  try{
+    await firebase.auth().sendPasswordResetEmail(email);
+    emailSent = true;
+  }catch(e){
+    console.error(e);
+    toast('Firebase could not send reset email — check the address','r');
   }
+
+  if(waOk && emailSent) toast('WhatsApp opened · reset email sent','g');
+  else if(waOk) toast('WhatsApp opened — email may have failed','a');
+  else if(emailSent) toast('Reset email sent. WhatsApp was blocked — paste the guide from clipboard','a');
+  else toast('Could not open WhatsApp or send email','r');
 }
 
 // ═══════════════════════════════════════
@@ -4976,9 +4981,20 @@ function openWhatsAppTo(phone, body){
   const msg = encodeURIComponent(body||'');
   try{ navigator.clipboard.writeText(body||''); }catch(e){}
   const digits = normalizePhone(phone);
-  const url = digits ? ('https://wa.me/'+digits+'?text='+msg) : ('https://wa.me/?text='+msg);
-  const w = window.open(url, '_blank');
-  return !!w;
+  // api.whatsapp.com is more reliable on mobile browsers than wa.me in some cases
+  const url = digits
+    ? ('https://api.whatsapp.com/send?phone='+digits+'&text='+msg)
+    : ('https://api.whatsapp.com/send?text='+msg);
+  let opened = false;
+  try{
+    const w = window.open(url, '_blank');
+    opened = !!(w && !w.closed);
+  }catch(e){ opened = false; }
+  if(!opened){
+    // Popup blocked — navigate this tab (user can go back)
+    try{ window.location.href = url; opened = true; }catch(e){}
+  }
+  return opened;
 }
 
 
