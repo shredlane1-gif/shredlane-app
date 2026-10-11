@@ -624,7 +624,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="field"><label>Password</label><input class="fi" type="password" id="lPw" placeholder="Your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="a-btn" onclick="doLogin()">Login →</button>
       <div class="a-err" id="lErr"></div>
-      <div class="a-note">Forgot password? <a href="#" onclick="requestPasswordResetWhatsApp();return false;" style="color:var(--grn);font-weight:700">Message coach on WhatsApp</a></div>
+      <div class="a-note">Forgot password? <a href="#" onclick="requestPasswordResetWhatsApp();return false;" style="color:var(--grn);font-weight:700">Email me a reset link</a> <span style="color:var(--gry)">(also opens WhatsApp to coach)</span></div>
     </div>
 
     <!-- REGISTER -->
@@ -4336,7 +4336,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         ${!isPend?`<button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">📷 Photos</button>`:''}
         ${!isPend?`<button class="approve-btn" onclick="copyClientWeekText('${u.email}')">📋 Week text</button>`:''}
         ${!isPend&&ci.length?`<button class="approve-btn" style="background:#1a2a1a;color:var(--grn);border:1px solid var(--grn)" onclick="viewMember('${u.email}');setTimeout(function(){try{shareBodyChartImage()}catch(e){}},400)">📈 Chart</button>`:''}
-        ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Reset PW</button>`:''}
+        ${!isPend?`<button class="approve-btn" style="background:var(--dark2);color:var(--txt);border:1px solid var(--bdr2)" onclick="resetPassword('${u.email}')">🔑 Email reset + WhatsApp</button>`:''}
         <button class="reject-btn" onclick="rejectUser('${u.email}')">${isPend?'❌ Decline':'📦 Archive'}</button>
       </div>
       ${!isPend?`<div class="mc-stats">
@@ -4585,31 +4585,34 @@ const restoreUser = requireAdmin(async function restoreUser(email){
   }
 });
 
-function requestPasswordResetWhatsApp(){
-  const emEl = document.getElementById('lPw') && document.getElementById('lPw').form
-    ? null : document.querySelector('#lPw');
-  // Prefer email field on login if present
+async function requestPasswordResetWhatsApp(){
   let em = '';
   try{
     const byId = document.getElementById('lEm') || document.getElementById('lEmail');
-    if(byId && byId.value) em = byId.value.trim();
+    if(byId && byId.value) em = byId.value.trim().toLowerCase();
   }catch(e){}
-  const lines = [
+  if(!em){
+    toast('Enter your email above first, then tap Forgot password','a');
+    return;
+  }
+  try{
+    await firebase.auth().sendPasswordResetEmail(em);
+    toast('Reset link sent to '+em+' — check inbox and spam','g');
+  }catch(e){
+    console.error(e);
+    const code = (e && e.code) || '';
+    if(code === 'auth/user-not-found') toast('No account with that email','r');
+    else toast('Could not send email — message coach on WhatsApp','a');
+  }
+  const body = [
     'Hi coach, I need a Shredlane password reset.',
-    em ? ('My email: '+em) : 'My email: (please fill)',
+    'My email: '+em,
     '',
-    'Please send me a new temporary password on WhatsApp.'
-  ];
-  const body = lines.join('\n');
-  try{ openWhatsAppTo('254705671119', body); }catch(e){
+    'Please send me a reset if I do not get the email.'
+  ].join('\n');
+  try{ openWhatsAppTo('254705671119', body); }catch(err){
     window.open('https://wa.me/254705671119?text='+encodeURIComponent(body),'_blank');
   }
-  toast('WhatsApp opened — message your coach for a reset','g');
-}
-
-function generateTempPassword(){
-  const n = String(Math.floor(1000 + Math.random()*9000));
-  return 'Shred'+n;
 }
 
 async function resetPassword(email){
@@ -4619,39 +4622,64 @@ async function resetPassword(email){
   const u = d.users[email] || Object.values(d.users||{}).find(x=>String((x&&x.email)||'').toLowerCase()===email) || {};
   const phone = u.phone || '';
   const name = (u.name||'there').split(' ')[0];
-  if(!phone){
-    toast('Add their WhatsApp number first, then try Reset PW','a');
-    window._adminOpenEmail = email;
-    try{ renderAdmin(); }catch(e){}
-    return;
-  }
-  const temp = generateTempPassword();
+  const appLink = (typeof getAppShareLink==='function') ? getAppShareLink() : 'https://shredlane1-gif.github.io/shredlane-app/';
+
   const ok = confirm(
-    'Send password reset to '+name+' on WhatsApp?\n\n'+
-    'Temporary password will be:\n'+temp+'\n\n'+
-    'You must set this same password for their account in Firebase Console:\n'+
-    'Authentication → Users → find '+email+' → reset password\n\n'+
-    'Continue?'
+    'Send password reset for '+name+'?\n\n'+
+    'They will get a Firebase email with a reset link.\n'+
+    (phone ? 'WhatsApp will open with step-by-step instructions.\n' : 'Add WhatsApp number to guide them on chat.\n')+
+    '\nContinue?'
   );
   if(!ok) return;
-  const appLink = (typeof getAppShareLink==='function') ? getAppShareLink() : 'https://shredlane1-gif.github.io/shredlane-app/';
+
+  let emailSent = false;
+  try{
+    await firebase.auth().sendPasswordResetEmail(email);
+    emailSent = true;
+  }catch(e){
+    console.error(e);
+    toast('Firebase could not send reset email — check the address','r');
+  }
+
   const body = [
     'Hi '+name+',',
     '',
-    'Your Shredlane password has been reset by your coach.',
+    'Your Shredlane password reset is ready.',
     '',
-    'App: '+appLink,
-    'Email: '+email,
-    'Temporary password: '+temp,
+    'HOW TO CHANGE YOUR PASSWORD',
     '',
-    'Log in with that password, then tap the lock icon in the app to choose your own.',
+    '1. Open the inbox for this email:',
+    email,
+    '',
+    '2. Find the email from Firebase / Shredlane',
+    '   (also check Spam, Junk, or Promotions)',
+    '',
+    '3. Tap the link in that email',
+    '   (it says something like Reset password or Reset your password)',
+    '',
+    '4. Type your NEW password twice and save',
+    '',
+    '5. Open the app and log in with:',
+    '   Email: '+email,
+    '   Password: the new one you just chose',
+    '',
+    'App link:',
+    appLink,
+    '',
+    'If you cannot find the email, reply here and your coach will resend it.',
     '',
     '— Shredlane coach'
   ].join('\n');
-  try{ navigator.clipboard.writeText(temp); }catch(e){}
-  const opened = openWhatsAppTo(phone, body);
-  if(opened) toast('WhatsApp opened · temp password copied: '+temp,'g');
-  else toast('Message copied. Temp password: '+temp+' — set it in Firebase for their email','a');
+
+  if(phone){
+    try{ openWhatsAppTo(phone, body); }catch(e){}
+    toast(emailSent ? 'Reset email sent · WhatsApp guide opened' : 'WhatsApp guide opened — email may have failed','g');
+  } else {
+    try{ navigator.clipboard.writeText(body); }catch(e){}
+    toast(emailSent ? 'Reset email sent. Add WhatsApp to send them the guide next time.' : 'No phone on file and email failed','a');
+    window._adminOpenEmail = email;
+    try{ renderAdmin(); }catch(e){}
+  }
 }
 
 // ═══════════════════════════════════════
