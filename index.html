@@ -2642,12 +2642,7 @@ async function saveWorkout(){
       const bits = [];
       if(sum.plannedMissing>0) bits.push(sum.plannedMissing+' set(s) still empty');
       if(sum.emptyExercises>0) bits.push(sum.emptyExercises+' exercise(s) not started');
-      const msg = 'Finish session with incomplete work?
-
-'+bits.join('
-')+'
-
-Only filled sets will be saved. Continue?';
+      const msg = 'Finish session with incomplete work?\n\n' + bits.join('\n') + '\n\nOnly filled sets will be saved. Continue?';
       if(!confirm(msg)) return;
     }
   }catch(e){}
