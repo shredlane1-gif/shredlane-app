@@ -4429,7 +4429,10 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           <div class="mrow-av" style="background:#444">${escHtml(u.name||'?').charAt(0).toUpperCase()}</div>
           <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name||u.email)}</div>
           <div class="mrow-meta">${escHtml(u.email)}${when?' · archived '+when:''}</div></div>
-          <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();restoreUser('${u.email}')">↩ Restore</button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();restoreUser('${u.email}')">↩ Restore</button>
+            <button class="reject-btn" style="padding:6px 10px;font-size:11px" onclick="event.stopPropagation();deleteArchivedUser('${u.email}')">🗑️ Delete</button>
+          </div>
         </div>`;
       }).join('') : '<div style="font-size:12px;color:var(--gry);padding:6px 0">No archived clients</div>'}
     </div>
@@ -4587,6 +4590,54 @@ const restoreUser = requireAdmin(async function restoreUser(email){
     toast('Could not restore — check connection / admin role','r');
   }
 });
+
+const deleteArchivedUser = requireAdmin(async function deleteArchivedUser(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email){ toast('Missing email','r'); return; }
+  const ok1 = confirm(
+    'Permanently delete '+email+'?\n\n'+
+    'This removes their profile and check-ins, workouts, and photos from the app.\n'+
+    'This cannot be undone.\n\n'+
+    'Continue?'
+  );
+  if(!ok1) return;
+  const ok2 = confirm('Final confirmation: delete '+email+' forever?');
+  if(!ok2) return;
+
+  const docsToDelete = new Set();
+  // All user docs matching this email (id or email field)
+  Object.entries(CACHE.users||{}).forEach(([id,u])=>{
+    if(!u) return;
+    const em = String(u.email||id).toLowerCase().trim();
+    if(em===email || id.toLowerCase()===email) docsToDelete.add(id);
+  });
+  docsToDelete.add(email);
+
+  try{
+    // Delete user profile docs
+    for(const id of docsToDelete){
+      try{ await fdb.collection('users').doc(id).delete(); }catch(e){ console.warn('user del', id, e); }
+      delete CACHE.users[id];
+    }
+    // Related data keyed by email
+    for(const col of ['checkins','workouts','photos']){
+      try{ await fdb.collection(col).doc(email).delete(); }catch(e){ console.warn(col, e); }
+      if(CACHE[col]) delete CACHE[col][email];
+      // also try any id that was a user doc id
+      for(const id of docsToDelete){
+        if(id===email) continue;
+        try{ await fdb.collection(col).doc(id).delete(); }catch(e){}
+        if(CACHE[col]) delete CACHE[col][id];
+      }
+    }
+    toast('Deleted permanently','r');
+    try{ renderAdmin(); }catch(e){}
+  }catch(e){
+    console.error(e);
+    toast('Could not delete — check connection / Firestore rules','r');
+  }
+});
+
 
 async function requestPasswordResetWhatsApp(){
   let em = '';
