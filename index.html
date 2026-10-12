@@ -1357,6 +1357,20 @@ function switchAuth(tab){
   document.getElementById('authSub').textContent=tab==='login'?'Sign in to your account':'Create your accountability account';
 }
 
+function touchLastSeen(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email) return;
+  const ts = Date.now();
+  try{
+    fdb.collection('users').doc(email).set({lastSeenAt: ts},{merge:true}).catch(function(){});
+    Object.entries(CACHE.users||{}).forEach(([id,u])=>{
+      if(String((u&&u.email)||id).toLowerCase()===email){
+        if(CACHE.users[id]) CACHE.users[id].lastSeenAt = ts;
+      }
+    });
+    if(CU && String(CU.email||'').toLowerCase()===email) CU.lastSeenAt = ts;
+  }catch(e){}
+}
 async function doLogin(){
   const em=(document.getElementById('lEm').value||'').trim().toLowerCase();
   const pw=(document.getElementById('lPw').value||'');
@@ -1415,6 +1429,7 @@ function onSuccess(user, opts){
   opts = opts || {};
   CU=user;
   cacheProfileLocal(user);
+  try{ touchLastSeen(user.email||user.id); }catch(e){}
   _lastKnownProgramId = user.programId || null; // avoid false "program assigned" toast on login
   closeAuth();
   document.getElementById('page-landing').classList.remove('active');
@@ -2268,7 +2283,7 @@ async function saveCI(){
     const localIdx=CACHE.checkins[CU.email].findIndex(c=>c.date===t);
     if(localIdx>=0)CACHE.checkins[CU.email][localIdx]=entry;
     else CACHE.checkins[CU.email].push(entry);
-    toast(offline?'💾 Saved on phone (sync when online)':'⚠️ Could not reach server — saved on this phone','a');
+    toast(offline?'Saved on phone · will sync when online':'Saved on phone · will sync when online','a');
     renderDash(); renderHistory();
   }
 }
@@ -2499,7 +2514,7 @@ async function saveWorkoutProgress(quiet){
     const localIdx=CACHE.workouts[u.email].findIndex(w=>w.id===entry.id);
     if(localIdx>=0) CACHE.workouts[u.email][localIdx]=entry;
     else CACHE.workouts[u.email].push(entry);
-    if(quiet) toast('✓ Saved on phone','a');
+    if(quiet) toast(navigator.onLine===false?'Saved on phone · will sync':'Synced ✓','g');
   }
 }
 
@@ -2596,6 +2611,31 @@ function allTimePRs(workouts){
 }
 
 let _savingWorkout=false;
+function workoutFinishSummary(){
+  const exercises = wktBuilder.exercises||[];
+  let totalEx = exercises.length, doneEx = 0, totalSets = 0, doneSets = 0;
+  exercises.forEach(ex=>{
+    const sets = ex.sets||[];
+    totalSets += sets.length;
+    let any = false;
+    sets.forEach(s=>{
+      const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+      if(s.done || hasReps || hasWt){ doneSets++; any = true; }
+    });
+    if(any) doneEx++;
+  });
+  const lastEx = exercises.filter(ex=>{
+    const sets = ex.sets||[];
+    return sets.some(s=>{
+      const hasReps = s.reps!=='' && s.reps!=null && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=='' && s.weight!=null && String(s.weight).trim()!=='';
+      return s.done || hasReps || hasWt;
+    });
+  }).pop();
+  const restHint = lastEx ? (isCompoundExercise(lastEx.name) ? 'compound 2:30' : 'isolation 1:00') : '';
+  return { totalEx, doneEx, totalSets, doneSets, restHint };
+}
 function workoutIncompleteSummary(){
   const issues = [];
   let emptyExercises = 0, emptySets = 0, partialSets = 0;
@@ -2705,12 +2745,17 @@ async function saveWorkout(){
         celeb = doneName+' done'+(nextName?(' · next is '+nextName):'');
       }
     }catch(e){}
-    if(offline) toast('💾 OFFLINE — saved on phone'+(celeb?(' · '+celeb):''),'a');
+    let finSum = '';
+    try{
+      const s = workoutFinishSummary();
+      finSum = s.doneEx+'/'+s.totalEx+' exercises · '+s.doneSets+' sets logged';
+    }catch(e){}
+    if(offline) toast('Saved on phone · will sync · '+(finSum||celeb||'session saved'),'a');
     else if(prs.length){
       const msg = prs.slice(0,3).map(p=>{ const prevStr = p.prev ? (' was '+p.prev.weight+'×'+p.prev.reps) : ''; return '🏆 '+(p.kind||'PR')+' '+p.name+': '+p.weight+' kg × '+p.reps+prevStr;}).join(' · ');
-      toast((celeb?(celeb+' · '):'')+msg, 'g');
+      toast((finSum?(finSum+' · '):'')+(celeb?(celeb+' · '):'')+msg, 'g');
     } else {
-      toast((celeb||(isUpdate?'Session updated':'Session finished'))+(autoTicked?(' · '+autoTicked+' set(s) auto-saved'):''),'g');
+      toast((offline?'':'Synced ✓ · ')+(finSum||celeb||(isUpdate?'Session updated':'Session finished')),'g');
     }
     closeWorkoutLogger();
     try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e){ renderWorkoutsScreen(); }
@@ -2721,7 +2766,7 @@ async function saveWorkout(){
     const localIdx=CACHE.workouts[u.email].findIndex(w=>w.id===entry.id);
     if(localIdx>=0)CACHE.workouts[u.email][localIdx]=entry;
     else CACHE.workouts[u.email].push(entry);
-    toast(offline?'💾 Saved on phone (sync when online)':'⚠️ Saved on this phone — will sync when online','a');
+    toast('Saved on phone · will sync when online','a');
     closeWorkoutLogger();
     try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e2){ renderWorkoutsScreen(); }
   }finally{
@@ -3611,6 +3656,31 @@ function renderTrend(){
 // ═══════════════════════════════════════
 
 
+function renderSundayPhotoNudge(u){
+  let el = document.getElementById('dashSundayPhoto');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'dashSundayPhoto';
+    const cont = document.getElementById('dashContent');
+    if(cont) cont.insertBefore(el, cont.firstChild);
+  }
+  if(!u || VIEWUSER || u.status!=='approved'){ el.style.display='none'; return; }
+  const day = new Date().getDay(); // 0 = Sunday
+  if(day !== 0){ el.style.display='none'; el.innerHTML=''; return; }
+  // Photo in last 7 days?
+  const raw = (CACHE.photos && CACHE.photos[u.email]) || [];
+  const list = Array.isArray(raw) ? raw : [];
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
+  const weekStr = weekAgo.toISOString().slice(0,10);
+  const hasRecent = list.some(e=>e && e.date >= weekStr);
+  if(hasRecent){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.35)">
+    <div style="font-size:13px;font-weight:700;color:var(--wht)">Sunday photo day</div>
+    <div style="font-size:12px;color:var(--gry);margin-top:4px">No progress photo this week yet. A quick front / side / back helps your coach track change.</div>
+    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('photos',document.getElementById('photosTab'))">Open Photos</button>
+  </div>`;
+}
 function renderMissedDayNudge(u, ci){
   let el=document.getElementById('dashMissedNudge');
   if(!el){
@@ -3739,10 +3809,12 @@ function renderDash(){
   if(!VIEWUSER){
     try{ renderTodayJobs(u, ci); }catch(e){}
     try{ renderMissedDayNudge(u, ci); }catch(e){}
+    try{ renderSundayPhotoNudge(u); }catch(e){}
     try{ renderRemindPrompt(u); }catch(e){}
     try{ renderClientAlerts(u, ci); }catch(e){}
     try{ renderGoalProgress(u, ci); }catch(e){}
   } else {
+    const sp=document.getElementById('dashSundayPhoto'); if(sp){ sp.style.display='none'; }
     // Coach view: hide client-only chrome
     ['dashTodayJobs','dashMissedNudge','dashQuickActions'].forEach(function(id){
       const el=document.getElementById(id); if(el){ el.style.display='none'; el.innerHTML=''; }
@@ -4230,15 +4302,22 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         ago=days<=0?'today':(days===1?'1d ago':days+'d ago');
       }
       const guar = u.guaranteeStatus || '';
+      const guarLabel = (typeof formatGuaranteeSince==='function' ? formatGuaranteeSince(u) : guar) || guar;
       const guarBadge = guar==='VOID, reset needed'||guar==='VOID'
-        ? ' <span class="inactive-badge" style="background:rgba(255,59,48,.2);color:var(--red)">VOID</span>'
+        ? ' <span class="inactive-badge" style="background:rgba(255,59,48,.2);color:var(--red)">'+escHtml(guarLabel)+'</span>'
         : (guar==='At risk'||guar==='Paused'
-          ? ' <span class="inactive-badge" style="background:rgba(255,184,0,.2);color:var(--amb)">'+escHtml(guar)+'</span>'
+          ? ' <span class="inactive-badge" style="background:rgba(255,184,0,.2);color:var(--amb)">'+escHtml(guarLabel)+'</span>'
           : (guar==='Active'||guar==='On track'
-            ? ' <span class="inactive-badge" style="background:rgba(126,224,0,.15);color:var(--grn)">'+escHtml(guar)+'</span>'
+            ? ' <span class="inactive-badge" style="background:rgba(126,224,0,.15);color:var(--grn)">'+escHtml(guarLabel)+'</span>'
             : ''));
       const prog = (u.programId && CACHE.programs && CACHE.programs[u.programId]) ? CACHE.programs[u.programId] : null;
-      const tip = isPend ? 'Pending approval' : (ago+' · '+meta.adh+'% adh'+(prog ? ' · '+prog.name : ''));
+      const lastSeenBit = u.lastSeenAt ? (function(ts){
+        const days=Math.floor((Date.now()-ts)/86400000);
+        if(days<=0) return 'opened today';
+        if(days===1) return 'opened yesterday';
+        return 'opened '+days+'d ago';
+      })(u.lastSeenAt) : '';
+      const tip = isPend ? 'Pending approval' : (ago+' · '+meta.adh+'% adh'+(prog ? ' · '+prog.name : '')+(lastSeenBit ? ' · '+lastSeenBit : ''));
       return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
         <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
         <div class="mrow-main"><div class="mrow-nm">${escHtml(u.name)}${meta.isInactive?' <span class="inactive-badge">INACTIVE</span>':''}${guarBadge}</div>
@@ -4297,6 +4376,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           <button class="approve-btn" style="padding:10px 16px;font-size:13px;background:var(--grn);color:#000;border:none;font-weight:800" onclick="sendWeeklyClientMessage('${u.email}')">📲 Send WhatsApp</button>
           <button type="button" class="approve-btn" style="padding:8px 12px;font-size:11px;background:transparent" onclick="previewWeeklyClientMessage('${u.email}')">Preview</button>
           <button type="button" class="approve-btn" style="padding:8px 12px;font-size:11px;background:transparent" onclick="copyWeeklyClientMessage('${u.email}')">Copy</button>
+          ${window._weeklyBatchMode?`<button type="button" class="approve-btn" style="padding:8px 12px;font-size:11px;background:transparent;color:var(--amb)" onclick="skipWeeklyBatchClient()">Skip</button><span style="font-size:11px;color:var(--gry)">${weeklyBatchRemaining(u.email)} left after this</span>`:''}
         </div>
         <div id="wkAutoFocus-${id}" style="margin-top:8px;font-size:11px;color:var(--gry);line-height:1.4"></div>
         <pre id="wkPreview-${id}" style="display:none;margin:10px 0 0;padding:10px;background:#000;border-radius:8px;font-size:11px;color:var(--txt);white-space:pre-wrap;font-family:Barlow,sans-serif;line-height:1.45"></pre>
@@ -4384,7 +4464,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     window._weeklyQueueEmails = [];
   }
 
-  html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search clients by name or email…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
+  html+=`<input class="msearch" id="adminMemberSearch" type="search" placeholder="Search name, email, or phone…" value="${escHtml(window._adminMemberQ||'')}" oninput="filterAdminMembers(this.value)">`;
 
   // Duplicate email hint (same email, multiple docs)
   const emailCounts={};
@@ -4403,7 +4483,16 @@ const renderAdmin = requireAdmin(function renderAdmin(){
   }
 
   const q=(window._adminMemberQ||'').toLowerCase().trim();
-  function matchQ(u){ if(!q) return true; return (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q); }
+  function matchQ(u){
+    if(!q) return true;
+    const name=(u.name||'').toLowerCase();
+    const em=(u.email||'').toLowerCase();
+    const phone=String(u.phone||'').replace(/\D/g,'');
+    const qDigits=q.replace(/\D/g,'');
+    if(name.includes(q)||em.includes(q)) return true;
+    if(qDigits.length>=3 && phone.includes(qDigits)) return true;
+    return false;
+  }
   const pendingF=pending.filter(matchQ);
   const approvedF=approved.filter(matchQ);
   if(pending.length){
@@ -5353,15 +5442,29 @@ async function saveGuaranteeStatus(email, status){
   if(!CU||CU.role!=='admin')return;
   email=String(email||'').trim().toLowerCase();
   try{
-    await fdb.collection('users').doc(email).set({guaranteeStatus: status||null},{merge:true});
-    if(CACHE.users[email]) CACHE.users[email].guaranteeStatus = status||null;
-    // sync duplicate docs by email
+    const prev = (CACHE.users[email]&&CACHE.users[email].guaranteeStatus) || null;
+    const payload = {guaranteeStatus: status||null};
+    if(status && status !== prev) payload.guaranteeStatusSince = Date.now();
+    if(!status) payload.guaranteeStatusSince = null;
+    await fdb.collection('users').doc(email).set(payload,{merge:true});
     Object.entries(CACHE.users||{}).forEach(([id,u])=>{
-      if(String((u&&u.email)||id).toLowerCase()===email) CACHE.users[id].guaranteeStatus = status||null;
+      if(String((u&&u.email)||id).toLowerCase()===email){
+        CACHE.users[id].guaranteeStatus = status||null;
+        if(payload.guaranteeStatusSince!==undefined) CACHE.users[id].guaranteeStatusSince = payload.guaranteeStatusSince;
+      }
     });
     toast(status?'Guarantee: '+status:'Guarantee cleared','g');
     try{ renderAdmin(); }catch(e){}
   }catch(e){ console.error(e); toast('Could not save guarantee','r'); }
+}
+function formatGuaranteeSince(u){
+  if(!u || !u.guaranteeStatus) return '';
+  const ts = u.guaranteeStatusSince;
+  if(!ts) return u.guaranteeStatus;
+  try{
+    const d = new Date(ts);
+    return u.guaranteeStatus+' since '+d.toLocaleString('en',{month:'short'})+' '+d.getDate();
+  }catch(e){ return u.guaranteeStatus; }
 }
 async function markWeeklyMessageSent(email){
   email=String(email||'').trim().toLowerCase();
@@ -5375,6 +5478,13 @@ async function markWeeklyMessageSent(email){
   }catch(e){ console.warn('lastWeeklyMessageAt', e); }
 }
 
+function weeklyBatchRemaining(fromEmail){
+  const q = window._weeklyQueueEmails || [];
+  const cur = String(fromEmail||'').toLowerCase();
+  const idx = q.indexOf(cur);
+  if(idx < 0) return q.length;
+  return Math.max(0, q.length - idx - 1);
+}
 function startWeeklyBatch(){
   const q = window._weeklyQueueEmails || [];
   if(!q.length){ toast('Queue is empty','a'); return; }
@@ -5382,14 +5492,21 @@ function startWeeklyBatch(){
   openWeeklyQueueClient(q[0]);
   setTimeout(function(){
     try{ previewWeeklyClientMessage(q[0]); }catch(e){}
-    toast('Batch mode: preview → Send WhatsApp → next client','g');
+    toast('Batch: Send or Skip · '+weeklyBatchRemaining(q[0])+' left after this','g');
   }, 200);
+}
+function skipWeeklyBatchClient(){
+  const cur = window._adminOpenEmail;
+  if(!cur){ toast('No client open','a'); return; }
+  window._weeklyQueueEmails = (window._weeklyQueueEmails||[]).filter(e=>e!==String(cur).toLowerCase());
+  toast('Skipped for this batch','a');
+  advanceWeeklyBatch(cur);
 }
 function advanceWeeklyBatch(justSentEmail){
   const q = window._weeklyQueueEmails || [];
   const cur = String(justSentEmail||'').toLowerCase();
   const idx = q.indexOf(cur);
-  const next = idx>=0 ? q[idx+1] : q[0];
+  const next = idx>=0 ? q[idx+1] : null;
   if(!next){
     window._weeklyBatchMode = false;
     toast('Sunday batch complete','g');
@@ -5399,7 +5516,7 @@ function advanceWeeklyBatch(justSentEmail){
   openWeeklyQueueClient(next);
   setTimeout(function(){
     try{ previewWeeklyClientMessage(next); }catch(e){}
-    toast('Next: '+next,'g');
+    toast('Next · '+weeklyBatchRemaining(next)+' left after this','g');
   }, 250);
 }
 
