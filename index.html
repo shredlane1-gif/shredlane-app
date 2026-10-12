@@ -505,6 +505,16 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 #pwaInstall.show{display:flex;align-items:center;gap:12px;justify-content:space-between}
 #restTimer{display:none;position:fixed;bottom:80px;right:14px;z-index:950;background:var(--dark2);border:1px solid var(--grn);border-radius:16px;padding:12px 16px;min-width:120px;text-align:center;box-shadow:0 8px 28px rgba(0,0,0,.5)}
 #restTimer.show{display:block}
+#muscleMapModal{display:none;position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.85);align-items:flex-end;justify-content:center;padding:12px}
+#muscleMapModal.show{display:flex}
+.mm-sheet{background:var(--dark2);border:1px solid var(--bdr);border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:480px;max-height:92vh;overflow:auto}
+.mm-sheet h3{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--grn);margin:0 0 4px}
+.mm-sub{font-size:12px;color:var(--gry);margin-bottom:12px}
+.mm-bodies{display:flex;gap:12px;justify-content:center;margin:8px 0 12px}
+.mm-bodies svg{width:140px;height:280px}
+.mm-tag{display:inline-block;padding:4px 10px;border-radius:20px;background:rgba(255,214,0,.12);border:1px solid rgba(255,214,0,.35);color:var(--grn);font-size:11px;font-weight:700;margin:2px}
+.mm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
 #restTimer .rt-time{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:800;color:var(--grn)}
 #restTimer .rt-btns{display:flex;gap:6px;margin-top:8px;justify-content:center}
 .inactive-badge{display:inline-block;background:rgba(255,59,48,.15);color:var(--red);font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;margin-left:6px}
@@ -533,6 +543,18 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <div style="font-size:13px;font-weight:700;color:var(--wht);flex:1">Install Shredlane on your home screen for faster daily check-ins</div>
   <button class="b-grn" style="width:auto;padding:8px 14px;background:var(--grn);color:#000;border:none;border-radius:8px;font-weight:800;cursor:pointer" onclick="installPWA()">Install</button>
   <button class="b-secondary" style="width:auto;padding:8px 10px;font-size:12px" onclick="dismissPWA()">✕</button>
+</div>
+<div id="muscleMapModal" onclick="if(event.target===this)closeMuscleMap()">
+  <div class="mm-sheet" onclick="event.stopPropagation()">
+    <h3 id="mmTitle">Session complete</h3>
+    <div class="mm-sub" id="mmSub">Muscles worked</div>
+    <div class="mm-bodies" id="mmBodies"></div>
+    <div id="mmTags"></div>
+    <div class="mm-actions">
+      <button class="approve-btn" style="flex:1;background:var(--grn);color:#000;border:none;font-weight:800;padding:12px" onclick="shareMuscleMapImage()">📲 Share</button>
+      <button class="approve-btn" style="padding:12px 16px;background:transparent" onclick="closeMuscleMap()">Done</button>
+    </div>
+  </div>
 </div>
 <div id="restTimer" aria-live="polite">
   <div style="font-size:10px;font-weight:800;color:var(--gry);letter-spacing:.08em;text-transform:uppercase" id="restTimerLabel">Rest</div>
@@ -2758,6 +2780,7 @@ async function saveWorkout(){
       toast((offline?'':'Synced ✓ · ')+(finSum||celeb||(isUpdate?'Session updated':'Session finished')),'g');
     }
     closeWorkoutLogger();
+    try{ if(!isUpdate) showMuscleMapModal(entry); }catch(e){}
     try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e){ renderWorkoutsScreen(); }
   }catch(e){
     console.error(e);
@@ -2768,6 +2791,7 @@ async function saveWorkout(){
     else CACHE.workouts[u.email].push(entry);
     toast('Saved on phone · will sync when online','a');
     closeWorkoutLogger();
+    try{ showMuscleMapModal(entry); }catch(e3){}
     try{ goTab('dashboard', document.getElementById('tbDashboard')); }catch(e2){ renderWorkoutsScreen(); }
   }finally{
     _savingWorkout=false;
@@ -5584,6 +5608,259 @@ async function saveCoachTargets(email){
   }catch(e){console.error(e);toast('Could not save targets','r');}
 }
 
+
+
+// ── Muscle map after session (Boostcamp-style) ──
+const MUSCLE_KEYS = ['chest','shoulders','biceps','triceps','abs','back','lats','traps','quads','hamstrings','glutes','calves','forearms'];
+
+function musclesFromExerciseName(name){
+  const n = String(name||'').toLowerCase();
+  const hits = new Set();
+  const rules = [
+    [/bench|push-?up|chest press|fly|pec|dip/, ['chest','triceps','shoulders']],
+    [/overhead press|shoulder press|military|arnold|lateral raise|front raise|rear delt|face pull/, ['shoulders']],
+    [/pull-?up|chin-?up|lat pulldown|row|seated row|bent.?over|t-?bar/, ['back','lats','biceps']],
+    [/deadlift|rdl|romanian|good morning|hip hinge/, ['hamstrings','glutes','back']],
+    [/squat|leg press|lunge|split squat|step.?up|leg extension/, ['quads','glutes']],
+    [/leg curl|hamstring/, ['hamstrings']],
+    [/hip thrust|glute bridge|kickback/, ['glutes']],
+    [/calf/, ['calves']],
+    [/curl|chin/, ['biceps']],
+    [/tricep|skull|pushdown|extension/, ['triceps']],
+    [/crunch|plank|sit.?up|ab wheel|leg raise|core/, ['abs']],
+    [/shrug/, ['traps']],
+    [/farmer|grip|wrist/, ['forearms']],
+  ];
+  rules.forEach(([re, ms])=>{ if(re.test(n)) ms.forEach(m=>hits.add(m)); });
+  if(!hits.size) hits.add('shoulders'); // generic compound fallback mild
+  return [...hits];
+}
+
+function musclesFromWorkoutEntry(entry){
+  const counts = {};
+  (entry.exercises||[]).forEach(ex=>{
+    const sets = (ex.sets||[]).filter(s=>{
+      const hasReps = s.reps!=null && s.reps!=='' && String(s.reps).trim()!=='';
+      const hasWt = s.weight!=null && s.weight!=='' && String(s.weight).trim()!=='';
+      return s.done || hasReps || hasWt;
+    });
+    if(!sets.length) return;
+    musclesFromExerciseName(ex.name).forEach(m=>{
+      counts[m] = (counts[m]||0) + sets.length;
+    });
+  });
+  return counts;
+}
+
+function muscleFill(level){
+  if(level>=4) return '#FFD600';
+  if(level>=2) return '#c9a800';
+  if(level>=1) return '#6b5a00';
+  return '#2a2a2a';
+}
+
+function buildBodySvg(counts, view){
+  // Simple front/back silhouettes with labeled regions
+  const f = (m)=>{
+    const c = counts[m]||0;
+    return muscleFill(c);
+  };
+  if(view==='front'){
+    return `<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg">
+      <title>Front</title>
+      <ellipse cx="60" cy="22" rx="14" ry="16" fill="#333"/>
+      <rect x="48" y="36" width="24" height="10" rx="3" fill="#333"/>
+      <!-- shoulders -->
+      <ellipse cx="28" cy="55" rx="16" ry="12" fill="${f('shoulders')}"/>
+      <ellipse cx="92" cy="55" rx="16" ry="12" fill="${f('shoulders')}"/>
+      <!-- chest -->
+      <ellipse cx="45" cy="72" rx="18" ry="14" fill="${f('chest')}"/>
+      <ellipse cx="75" cy="72" rx="18" ry="14" fill="${f('chest')}"/>
+      <!-- biceps -->
+      <rect x="8" y="68" width="14" height="36" rx="7" fill="${f('biceps')}"/>
+      <rect x="98" y="68" width="14" height="36" rx="7" fill="${f('biceps')}"/>
+      <!-- abs -->
+      <rect x="42" y="88" width="36" height="42" rx="6" fill="${f('abs')}"/>
+      <!-- quads -->
+      <rect x="38" y="132" width="18" height="55" rx="8" fill="${f('quads')}"/>
+      <rect x="64" y="132" width="18" height="55" rx="8" fill="${f('quads')}"/>
+      <!-- calves -->
+      <rect x="40" y="190" width="14" height="40" rx="6" fill="${f('calves')}"/>
+      <rect x="66" y="190" width="14" height="40" rx="6" fill="${f('calves')}"/>
+      <text x="60" y="255" text-anchor="middle" fill="#666" font-size="11" font-family="Barlow,sans-serif">FRONT</text>
+    </svg>`;
+  }
+  return `<svg viewBox="0 0 120 260" xmlns="http://www.w3.org/2000/svg">
+    <title>Back</title>
+    <ellipse cx="60" cy="22" rx="14" ry="16" fill="#333"/>
+    <rect x="48" y="36" width="24" height="10" rx="3" fill="#333"/>
+    <ellipse cx="28" cy="55" rx="16" ry="12" fill="${f('shoulders')}"/>
+    <ellipse cx="92" cy="55" rx="16" ry="12" fill="${f('shoulders')}"/>
+    <!-- traps -->
+    <path d="M40 48 Q60 58 80 48 L75 70 L45 70 Z" fill="${f('traps')}"/>
+    <!-- lats / back -->
+    <ellipse cx="60" cy="90" rx="28" ry="32" fill="${f('lats')}"/>
+    <ellipse cx="60" cy="88" rx="18" ry="22" fill="${f('back')}"/>
+    <!-- triceps -->
+    <rect x="8" y="68" width="14" height="36" rx="7" fill="${f('triceps')}"/>
+    <rect x="98" y="68" width="14" height="36" rx="7" fill="${f('triceps')}"/>
+    <!-- glutes -->
+    <ellipse cx="48" cy="140" rx="14" ry="16" fill="${f('glutes')}"/>
+    <ellipse cx="72" cy="140" rx="14" ry="16" fill="${f('glutes')}"/>
+    <!-- hamstrings -->
+    <rect x="38" y="155" width="18" height="40" rx="8" fill="${f('hamstrings')}"/>
+    <rect x="64" y="155" width="18" height="40" rx="8" fill="${f('hamstrings')}"/>
+    <rect x="40" y="198" width="14" height="32" rx="6" fill="${f('calves')}"/>
+    <rect x="66" y="198" width="14" height="32" rx="6" fill="${f('calves')}"/>
+    <text x="60" y="255" text-anchor="middle" fill="#666" font-size="11" font-family="Barlow,sans-serif">BACK</text>
+  </svg>`;
+}
+
+let _lastMuscleMap = null; // {entry, counts, title}
+
+function showMuscleMapModal(entry){
+  if(!entry) return;
+  const counts = musclesFromWorkoutEntry(entry);
+  const active = Object.keys(counts).filter(k=>counts[k]>0).sort((a,b)=>counts[b]-counts[a]);
+  if(!active.length) return;
+  _lastMuscleMap = { entry, counts, title: entry.title||'Session' };
+  const modal = document.getElementById('muscleMapModal');
+  const bodies = document.getElementById('mmBodies');
+  const tags = document.getElementById('mmTags');
+  const title = document.getElementById('mmTitle');
+  const sub = document.getElementById('mmSub');
+  if(!modal||!bodies) return;
+  if(title) title.textContent = (entry.title||'Session').replace(/^.*?—\s*/,'') || 'Session complete';
+  if(sub) sub.textContent = 'Muscles worked this session';
+  bodies.innerHTML = buildBodySvg(counts,'front') + buildBodySvg(counts,'back');
+  tags.innerHTML = active.map(m=>`<span class="mm-tag">${m} · ${counts[m]} set${counts[m]===1?'':'s'}</span>`).join(' ');
+  modal.classList.add('show');
+}
+function closeMuscleMap(){
+  const modal = document.getElementById('muscleMapModal');
+  if(modal) modal.classList.remove('show');
+}
+
+async function shareMuscleMapImage(){
+  if(!_lastMuscleMap){ toast('No session map to share','a'); return; }
+  const { entry, counts, title } = _lastMuscleMap;
+  const active = Object.keys(counts).filter(k=>counts[k]>0).sort((a,b)=>counts[b]-counts[a]);
+  const u = VIEWUSER||CU;
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080; canvas.height = 1350;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0,0,1080,1350);
+  ctx.fillStyle = '#FFD600'; ctx.fillRect(0,0,1080,10);
+  ctx.fillStyle = '#FFD600';
+  ctx.font = 'bold 48px Barlow Condensed, Arial Black, sans-serif';
+  ctx.fillText('SHREDLANE', 60, 80);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 44px Barlow Condensed, Arial Black, sans-serif';
+  const name = (u&&u.name)?u.name.split(' ')[0]:'Athlete';
+  ctx.fillText(name, 60, 145);
+  ctx.fillStyle = '#888';
+  ctx.font = '26px Barlow, Arial, sans-serif';
+  ctx.fillText((title||'Session').slice(0,40), 60, 190);
+  ctx.fillText(entry.date||'', 60, 230);
+
+  // Draw simplified bodies on canvas
+  function drawBody(x0, front){
+    const f = (m)=>{
+      const c = counts[m]||0;
+      if(c>=4) return '#FFD600';
+      if(c>=2) return '#c9a800';
+      if(c>=1) return '#6b5a00';
+      return '#2a2a2a';
+    };
+    const s = 2.2;
+    // head
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.ellipse(x0+60*s, 300+22*s, 14*s, 16*s, 0, 0, Math.PI*2); ctx.fill();
+    // shoulders
+    ctx.fillStyle = f('shoulders');
+    ctx.beginPath(); ctx.ellipse(x0+28*s, 300+55*s, 16*s, 12*s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x0+92*s, 300+55*s, 16*s, 12*s, 0, 0, Math.PI*2); ctx.fill();
+    if(front){
+      ctx.fillStyle = f('chest');
+      ctx.beginPath(); ctx.ellipse(x0+45*s, 300+72*s, 18*s, 14*s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x0+75*s, 300+72*s, 18*s, 14*s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = f('biceps');
+      ctx.fillRect(x0+8*s, 300+68*s, 14*s, 36*s);
+      ctx.fillRect(x0+98*s, 300+68*s, 14*s, 36*s);
+      ctx.fillStyle = f('abs');
+      ctx.fillRect(x0+42*s, 300+88*s, 36*s, 42*s);
+      ctx.fillStyle = f('quads');
+      ctx.fillRect(x0+38*s, 300+132*s, 18*s, 55*s);
+      ctx.fillRect(x0+64*s, 300+132*s, 18*s, 55*s);
+    } else {
+      ctx.fillStyle = f('traps');
+      ctx.beginPath(); ctx.moveTo(x0+40*s,300+48*s); ctx.quadraticCurveTo(x0+60*s,300+58*s,x0+80*s,300+48*s); ctx.lineTo(x0+75*s,300+70*s); ctx.lineTo(x0+45*s,300+70*s); ctx.fill();
+      ctx.fillStyle = f('lats');
+      ctx.beginPath(); ctx.ellipse(x0+60*s, 300+90*s, 28*s, 32*s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = f('triceps');
+      ctx.fillRect(x0+8*s, 300+68*s, 14*s, 36*s);
+      ctx.fillRect(x0+98*s, 300+68*s, 14*s, 36*s);
+      ctx.fillStyle = f('glutes');
+      ctx.beginPath(); ctx.ellipse(x0+48*s, 300+140*s, 14*s, 16*s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x0+72*s, 300+140*s, 14*s, 16*s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = f('hamstrings');
+      ctx.fillRect(x0+38*s, 300+155*s, 18*s, 40*s);
+      ctx.fillRect(x0+64*s, 300+155*s, 18*s, 40*s);
+    }
+    ctx.fillStyle = f('calves');
+    ctx.fillRect(x0+40*s, 300+(front?190:198)*s, 14*s, 40*s);
+    ctx.fillRect(x0+66*s, 300+(front?190:198)*s, 14*s, 40*s);
+    ctx.fillStyle = '#666';
+    ctx.font = '22px Barlow, sans-serif';
+    ctx.fillText(front?'FRONT':'BACK', x0+35*s, 300+255*s);
+  }
+  drawBody(80, true);
+  drawBody(560, false);
+
+  // Tags
+  let ty = 980;
+  ctx.fillStyle = '#FFD600';
+  ctx.font = 'bold 28px Barlow Condensed, sans-serif';
+  ctx.fillText('MUSCLES WORKED', 60, ty);
+  ty += 40;
+  ctx.font = '26px Barlow, sans-serif';
+  ctx.fillStyle = '#fff';
+  const line = active.map(m=>m+' ('+counts[m]+')').join('  ·  ');
+  // wrap
+  const words = line.split('  ·  ');
+  let row = '';
+  words.forEach((w,i)=>{
+    const test = row ? row+'  ·  '+w : w;
+    if(ctx.measureText(test).width > 960){
+      ctx.fillText(row, 60, ty); ty += 36; row = w;
+    } else row = test;
+  });
+  if(row) ctx.fillText(row, 60, ty);
+
+  ctx.fillStyle = '#555';
+  ctx.font = '22px Barlow, sans-serif';
+  ctx.fillText('shredlane1-gif.github.io/shredlane-app', 60, 1300);
+
+  canvas.toBlob(async function(blob){
+    if(!blob){ toast('Could not create image','r'); return; }
+    const file = new File([blob], 'shredlane-session.png', {type:'image/png'});
+    try{
+      if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({ files:[file], title:'Shredlane session', text: name+' · '+(title||'workout') });
+        toast('Shared','g');
+        return;
+      }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'shredlane-session.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast('Image saved — share it from your gallery','g');
+    }catch(e2){ toast('Could not share image','r'); }
+  }, 'image/png');
+}
 
 // Share progress image
 
