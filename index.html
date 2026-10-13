@@ -490,6 +490,11 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .onboard-card .ob-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bdr);font-size:13px;color:var(--txt)}
 .onboard-card .ob-item:first-of-type{border-top:none}
 .onboard-card .ob-done{color:var(--grn);text-decoration:line-through;opacity:.7}
+.onboard-card .ob-day{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--grn);margin-bottom:4px}
+.onboard-card .ob-day-title{font-size:16px;font-weight:800;color:var(--wht);margin-bottom:6px}
+.onboard-card .ob-day-body{font-size:13px;color:var(--txt);line-height:1.5;margin-bottom:10px}
+.onboard-card .ob-steps{margin:8px 0 4px}
+
 .ex-prog-card{background:var(--dark);border:1px solid var(--bdr);border-radius:12px;padding:14px 16px;margin-bottom:12px}
 .ex-prog-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .ex-prog-tab{padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;background:var(--dark2);border:1px solid var(--bdr2);color:var(--gry);cursor:pointer}
@@ -2325,6 +2330,8 @@ function showWorkoutLogger(show){
   const card=document.getElementById('wktLoggerCard');
   if(card)card.style.display=show?'block':'none';
   wktLoggerOpen=!!show;
+  if(show){ try{ requestScreenWakeLock(); }catch(e){} }
+  else { try{ releaseScreenWakeLock(); }catch(e){} }
 }
 
 function closeWorkoutLogger(){
@@ -3803,6 +3810,135 @@ function renderTodayJobs(u, ci){
   </div>`;
 }
 
+
+// ═══════════════════════════════════════
+// IN-APP ONBOARDING (7 days — no daily video links needed)
+// ═══════════════════════════════════════
+const ONBOARD_DAYS = [
+  {
+    title: 'Welcome to Shredlane',
+    body: 'This app is where you log weight, waist, steps, water, sleep, and training. Food stays in MyNetDiary — your coach reviews both.',
+    steps: ['Open Check-in and log today (weight + waist at least)', 'Turn on notifications when asked so morning/evening reminders work'],
+    action: { label: 'Open check-in', tab: 'checkin' }
+  },
+  {
+    title: 'Your daily rhythm',
+    body: 'Morning: weight and waist. Evening: steps, water, and sleep. One solid log per day is enough — consistency beats perfection.',
+    steps: ['Log morning numbers if you have not yet', 'Finish the day with steps, water, sleep'],
+    action: { label: 'Open check-in', tab: 'checkin' }
+  },
+  {
+    title: 'Training lives in Train',
+    body: 'Your program is already in the app. Open Train — the next session loads for you. Tick each set when done. Rest timer starts on its own.',
+    steps: ['Open Train', 'Complete or start your next session'],
+    action: { label: 'Open Train', tab: 'workouts' }
+  },
+  {
+    title: 'Tick sets as you go',
+    body: 'After every set, tap the tick so it saves. When you finish, the app shows which muscles you worked and you can share the image.',
+    steps: ['Log a session and tick your sets', 'Finish session when you are done'],
+    action: { label: 'Open Train', tab: 'workouts' }
+  },
+  {
+    title: 'Photos on Sundays',
+    body: 'Once a week (Sunday is ideal), upload front, side, and back photos. Your coach uses them to track real change — not just the scale.',
+    steps: ['Open Photos', 'Upload a set when you are ready (Sunday preferred)'],
+    action: { label: 'Open Photos', tab: 'photos' }
+  },
+  {
+    title: 'How coaching works',
+    body: 'Day to day, food feedback is on MyNetDiary. Each week your coach sends a Shredlane WhatsApp update with what went well and what to focus on next.',
+    steps: ['Keep logging in the app', 'Reply to your coach on WhatsApp if anything is unclear'],
+    action: null
+  },
+  {
+    title: 'You are set',
+    body: 'Checklist: daily check-in, train from your program, weekly photo, read the weekly message. That is the whole system — simple on purpose.',
+    steps: ['Hit your check-in today', 'Train when it is session day'],
+    action: { label: 'Go to dashboard tips', tab: 'dashboard' }
+  }
+];
+
+function onboardDayIndex(u){
+  // Day 1 = join date (or approved day). Clamp 0..6 for 7-day plan
+  let start = u.joined || null;
+  if(u.approvedAt){
+    try{ start = new Date(u.approvedAt).toISOString().slice(0,10); }catch(e){}
+  }
+  if(!start) start = today();
+  let days = 0;
+  try{
+    const a = new Date(start+'T12:00:00');
+    const b = new Date(today()+'T12:00:00');
+    days = Math.floor((b - a) / 86400000);
+  }catch(e){ days = 0; }
+  if(days < 0) days = 0;
+  return Math.min(days, ONBOARD_DAYS.length - 1);
+}
+
+function onboardDismissedKey(email){
+  return 'sl_onboard_dismiss_'+String(email||'').toLowerCase();
+}
+function isOnboardFullyDismissed(email){
+  try{ return localStorage.getItem(onboardDismissedKey(email)) === '1'; }catch(e){ return false; }
+}
+function dismissOnboarding(){
+  if(!CU) return;
+  try{ localStorage.setItem(onboardDismissedKey(CU.email), '1'); }catch(e){}
+  try{ fdb.collection('users').doc(CU.email).set({onboardDismissed:true},{merge:true}); }catch(e){}
+  toast('Onboarding hidden — you can still use every tab','g');
+  try{ renderDash(); }catch(e){}
+}
+
+function renderOnboarding(u, ci, wkts){
+  const ob = document.getElementById('onboardWrap');
+  if(!ob) return;
+  if(!u || VIEWUSER || u.status !== 'approved'){ ob.style.display='none'; return; }
+  if(u.onboardDismissed || isOnboardFullyDismissed(u.email)){ ob.style.display='none'; return; }
+
+  // Show for first 14 days after join/approve, or until basics done + day plan finished
+  let start = u.joined || today();
+  if(u.approvedAt){
+    try{ start = new Date(u.approvedAt).toISOString().slice(0,10); }catch(e){}
+  }
+  let daysSince = 0;
+  try{
+    daysSince = Math.floor((new Date(today()+'T12:00:00') - new Date(start+'T12:00:00')) / 86400000);
+  }catch(e){}
+  if(daysSince > 14){ ob.style.display='none'; return; }
+
+  const dayIdx = onboardDayIndex(u);
+  const day = ONBOARD_DAYS[dayIdx];
+  const hasCI = (ci||[]).length > 0;
+  const hasProg = !!u.programId;
+  const hasWkt = (wkts||[]).length > 0;
+  const dayNum = dayIdx + 1;
+
+  const stepsHtml = (day.steps||[]).map(s=>`<div class="ob-item">→ ${escHtml(s)}</div>`).join('');
+  const actionBtn = day.action
+    ? `<button class="approve-btn" style="margin-top:10px;padding:10px 14px;background:var(--grn);color:#000;border:none;font-weight:800" onclick="goTab('${day.action.tab}',document.getElementById('${day.action.tab==='checkin'?'tbCheckin':(day.action.tab==='workouts'?'tbWorkouts':(day.action.tab==='photos'?'photosTab':'tbDashboard'))}'))">${escHtml(day.action.label)}</button>`
+    : '';
+
+  ob.style.display = 'block';
+  ob.innerHTML = `<div class="onboard-card">
+    <div class="ob-day">Day ${dayNum} of ${ONBOARD_DAYS.length} · in-app guide</div>
+    <div class="ob-day-title">${escHtml(day.title)}</div>
+    <div class="ob-day-body">${escHtml(day.body)}</div>
+    <div class="ob-steps">${stepsHtml}</div>
+    <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)">
+      <div style="font-size:11px;font-weight:700;color:var(--gry);margin-bottom:4px">Basics</div>
+      <div class="ob-item ${hasCI?'ob-done':''}">${hasCI?'✅':'○'} First check-in</div>
+      <div class="ob-item ${hasProg?'ob-done':''}">${hasProg?'✅':'○'} Program assigned</div>
+      <div class="ob-item ${hasWkt?'ob-done':''}">${hasWkt?'✅':'○'} First workout logged</div>
+    </div>
+    ${actionBtn}
+    <div style="margin-top:10px">
+      <button type="button" class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px" onclick="dismissOnboarding()">I know the system — hide this</button>
+    </div>
+  </div>`;
+}
+
+
 function renderDash(){
   if(!CU)return;
   const u=VIEWUSER||CU;
@@ -3847,23 +3983,8 @@ function renderDash(){
   }
   try{ renderNextSessionDash(u, wkts); }catch(e){}
 
-  // ── Onboarding checklist (first ~2 weeks / sparse data) ──
-  const ob=document.getElementById('onboardWrap');
-  if(ob && u.status==='approved' && !VIEWUSER){
-    const hasCI=ci.length>0;
-    const hasProg=!!u.programId;
-    const hasWkt=wkts.length>0;
-    const allDone=hasCI&&hasProg&&hasWkt;
-    if(!allDone && ci.length<5){
-      ob.style.display='block';
-      ob.innerHTML=`<div class="onboard-card">
-        <div class="ob-ttl">🚀 Getting started</div>
-        <div class="ob-item ${hasCI?'ob-done':''}">${hasCI?'✅':'1️⃣'} Complete your first check-in</div>
-        <div class="ob-item ${hasProg?'ob-done':''}">${hasProg?'✅':'2️⃣'} Open Train — your program lives there</div>
-        <div class="ob-item ${hasWkt?'ob-done':''}">${hasWkt?'✅':'3️⃣'} Log your first workout from the program</div>
-      </div>`;
-    } else ob.style.display='none';
-  } else if(ob) ob.style.display='none';
+  // ── In-app onboarding (replaces daily video links) ──
+  try{ renderOnboarding(u, ci, wkts); }catch(e){ console.error('onboard', e); }
 
   // ── Coach note ──
   const cn=document.getElementById('coachNoteWrap');
@@ -4897,6 +5018,34 @@ function isCompoundExercise(name){
 function restSecondsForExercise(name){
   return isCompoundExercise(name) ? 150 : 60;
 }
+
+// Keep screen on during workout / rest (Screen Wake Lock API)
+let _wakeLock = null;
+async function requestScreenWakeLock(){
+  try{
+    if(!('wakeLock' in navigator)) return false;
+    if(_wakeLock) return true;
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', function(){ _wakeLock = null; });
+    return true;
+  }catch(e){
+    console.warn('wakeLock', e);
+    _wakeLock = null;
+    return false;
+  }
+}
+function releaseScreenWakeLock(){
+  try{
+    if(_wakeLock){ _wakeLock.release(); _wakeLock = null; }
+  }catch(e){ _wakeLock = null; }
+}
+// Re-request if tab becomes visible again during a session
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && typeof wktLoggerOpen !== 'undefined' && wktLoggerOpen){
+    requestScreenWakeLock();
+  }
+});
+
 function startRestForExercise(exName){
   // Unlock audio on this user gesture so the end alarm can play
   try{
@@ -4912,35 +5061,38 @@ function startRestForExercise(exName){
   startRestTimer(secs);
 }
 function playRestAlarm(){
-  // Loud multi-beep via Web Audio (no external file needed)
+  // Loud repeating alarm (Web Audio) + vibration
   try{
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if(!Ctx) return;
     const ctx = playRestAlarm._ctx || (playRestAlarm._ctx = new Ctx());
     if(ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
-    // Three strong beeps
-    [0, 0.35, 0.7].forEach(function(delay, i){
+    // 6 beeps over ~2.5s — hard to miss with phone unmuted
+    for(let i=0;i<6;i++){
+      const delay = i * 0.4;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'square';
-      osc.frequency.value = i===2 ? 980 : 880;
+      osc.frequency.value = (i % 2 === 0) ? 880 : 1175;
       gain.gain.setValueAtTime(0.0001, now + delay);
-      gain.gain.exponentialRampToValueAtTime(0.55, now + delay + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.28);
+      gain.gain.exponentialRampToValueAtTime(0.85, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.32);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now + delay);
-      osc.stop(now + delay + 0.3);
-    });
+      osc.stop(now + delay + 0.35);
+    }
   }catch(e){ console.warn('rest alarm audio', e); }
   try{
-    if(navigator.vibrate) navigator.vibrate([300,120,300,120,400]);
+    if(navigator.vibrate) navigator.vibrate([400,150,400,150,400,150,600]);
   }catch(e){}
+  try{ toast('⏱ REST DONE — next set','g'); }catch(e){}
 }
 function startRestTimer(secs){
   secs = secs || 150;
   _restLeft = secs;
+  try{ requestScreenWakeLock(); }catch(e){}
   const box = document.getElementById('restTimer');
   const disp = document.getElementById('restTimerDisplay');
   if(box) box.classList.add('show');
@@ -4950,7 +5102,6 @@ function startRestTimer(secs){
     if(_restLeft<=0){
       stopRestTimer();
       playRestAlarm();
-      toast('⏱ Rest done — next set','g');
       return;
     }
     _restLeft--;
