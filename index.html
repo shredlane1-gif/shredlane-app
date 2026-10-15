@@ -2374,15 +2374,8 @@ async function saveCI(){
   const sl = allowSl ? parseFloat((document.getElementById('sleepR')||{}).value) : null;
   const waterVal = allowWater ? waterCount : 0;
   const hu=null, no='', proteinPct=null, workoutDone=null, sleepQual=null;
-  if(allowW && (!wt||isNaN(wt))){ toast('Please enter your weight (scale)','r'); return; }
-  if(allowWa && (!wa||isNaN(wa))){ toast('Please enter your waist (scale)','r'); return; }
-  // Beginner L1–2: allow a light log with no scale
-  if(!allowW && !allowWa){
-    const hasAnything = (st>0) || (allowWater && waterVal>0) || (allowSl && sl!=null);
-    if(!hasAnything && getTrackingProfile(CU).level <= 2){
-      // Still allow pure "I showed up" check-in
-    }
-  }
+  // Empty fields allowed — log what you have; skip the rest
+  // (weight/waist/water/sleep can all be blank; still counts as a check-in day)
   const t=selectedDate||today();
   const entry={date:t,weight:(wt&&!isNaN(wt))?wt:null,waist:(wa&&!isNaN(wa))?wa:null,steps:st,sleep:sl,hunger:hu,notes:no,protein:proteinPct,workout:workoutDone,sleepQual:sleepQual,water:waterVal};
   const offline = (typeof navigator!=='undefined' && navigator.onLine===false);
