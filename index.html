@@ -4534,9 +4534,10 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         <button class="approve-btn" onclick="viewMemberPhotos('${u.email}')">Photos</button>
       </div>
 
+
       <!-- 4. Settings (collapsed) -->
       <details style="margin-top:4px;border-top:1px solid var(--bdr);padding-top:10px">
-        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--gry);list-style:none;user-select:none">Settings & more ▾</summary>
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--gry);list-style:none;user-select:none">Settings · targets · password reset ▾</summary>
         <div style="margin-top:12px">
           <div style="margin-bottom:10px"><div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:4px">WhatsApp</div>
             <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
@@ -4569,7 +4570,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
             <button class="approve-btn" style="padding:6px 10px;font-size:11px;background:transparent" onclick="copyClientWeekText('${u.email}')">Week text</button>
-            <button class="approve-btn" style="padding:6px 10px;font-size:11px;background:transparent" onclick="resetPassword('${u.email}')">Password reset</button>
+            <button class="approve-btn" style="padding:6px 10px;font-size:11px;background:transparent" onclick="resetPassword('${u.email}')">🔑 Password reset</button>
             <button class="reject-btn" style="padding:6px 10px;font-size:11px" onclick="rejectUser('${u.email}')">Archive</button>
           </div>
         </div>
