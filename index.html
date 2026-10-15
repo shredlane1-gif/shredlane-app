@@ -730,7 +730,8 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
     <!-- Pending approval notice -->
     <div class="pending-notice" id="pendingNotice" style="display:none">
-      ⏳ Your account is awaiting coach approval.<br>
+      <!-- approval no longer required -->
+      <span style="display:none">
       <span style="font-size:12px;opacity:.8">Contact: shredlane1@gmail.com · +254 705 671 119</span>
     </div>
 
@@ -1443,12 +1444,12 @@ async function doRegister(){
   try{
     await firebase.auth().createUserWithEmailAndPassword(em,pw);
     const phone=normalizePhone(phoneRaw);
-    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,phone:phone||null,role:'member',status:'pending',joined:today(),trackingMode:'beginner',trackingLevel:1};
+    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,phone:phone||null,role:'member',status:'approved',joined:today(),approvedAt:Date.now(),trackingMode:'beginner',trackingLevel:1};
     await fdb.collection('users').doc(em).set(user);
     CACHE.users[em]=user;
-    await firebase.auth().signOut();
+    // Stay signed in — account is active immediately (auth listener will open the app)
     closeAuth();
-    toast('Account created! Please wait for admin approval.','g');
+    toast('Account ready — welcome to Shredlane!','g');
   }catch(e){
     console.error(e);
     err.textContent=mapAuthError(e);
@@ -1459,6 +1460,16 @@ async function doRegister(){
 
 function onSuccess(user, opts){
   opts = opts || {};
+  // Legacy pending accounts: activate immediately (approval no longer required)
+  if(user && user.status === 'pending' && user.role !== 'admin'){
+    user.status = 'approved';
+    user.approvedAt = user.approvedAt || Date.now();
+    try{
+      const em = String(user.email||'').toLowerCase();
+      if(em) fdb.collection('users').doc(em).set({status:'approved', approvedAt:user.approvedAt},{merge:true}).catch(function(){});
+      if(CACHE.users[em]) CACHE.users[em].status = 'approved';
+    }catch(e){}
+  }
   CU=user;
   cacheProfileLocal(user);
   try{ touchLastSeen(user.email||user.id); }catch(e){}
@@ -1516,10 +1527,7 @@ function goTab(name,btn){
     name='history';
     btn = document.getElementById('tbHistory') || btn;
   }
-  if((name==='checkin'||name==='workouts') && CU && CU.status==='pending' && !VIEWUSER){
-    toast('⏳ This unlocks once the coach approves your account.','a');
-    return;
-  }
+  // Approval no longer required — check-in and train are open for all signed-in members
   if(btn && name==='admin')VIEWUSER=null; // exit coach "view as" only when returning to Admin via the bottom nav
   document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tb').forEach(t=>t.classList.remove('active'));
@@ -1690,7 +1698,7 @@ function pickDate(ds){
   if(existing){
     if(existing.weight){document.getElementById('ciWt').value=existing.weight;document.getElementById('ciWtL').textContent=existing.weight+' kg';}
     if(existing.waist){document.getElementById('ciWa').value=existing.waist;document.getElementById('ciWaL').textContent=existing.waist+' in';}
-    document.getElementById('ciSt').value=existing.steps||'';document.getElementById('ciStL').textContent=(existing.steps||0).toLocaleString();
+    try{ const st=document.getElementById('ciSt'); if(st) st.value=existing.steps||''; const stL=document.getElementById('ciStL'); if(stL) stL.textContent=(existing.steps||0).toLocaleString(); }catch(e){}
     document.getElementById('sleepR').value=existing.sleep||7;document.getElementById('ciSlL').textContent=(existing.sleep||7)+' hrs';
     try{ const hr=document.getElementById('hungR'); if(hr && hr.type!=='hidden'){ hr.value=existing.hunger||5; if(typeof onHu==='function') onHu(existing.hunger||5);} }catch(e){}
     document.getElementById('ciNotes').value=existing.notes||'';
@@ -1707,7 +1715,7 @@ function pickDate(ds){
     toast('📋 Existing entry loaded — edit and save to update','a');
   } else {
     // Clear form for new past entry
-    document.getElementById('ciSt').value='';document.getElementById('ciStL').textContent='0';
+    try{ const st=document.getElementById('ciSt'); if(st) st.value=''; const stL=document.getElementById('ciStL'); if(stL) stL.textContent='0'; }catch(e){}
     document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
     document.getElementById('hungR').value=5;onHu(5);
     document.getElementById('ciNotes').value='';
@@ -1775,10 +1783,14 @@ function getTrackingProfile(u){
 }
 function trackingAllows(field, u){
   const p = getTrackingProfile(u);
+  // Daily steps removed — Step Up + coach weekly total in the message
+  if(field === 'steps') return false;
   if(p.mode === 'full') return true;
-  if(field === 'steps') return p.level >= 1;
-  if(field === 'water' || field === 'sleep') return p.level >= 3;
-  if(field === 'weight' || field === 'waist') return p.level >= 4;
+  // Beginner ladder (only taught items):
+  // L1 show up · L2 water · L3 scale · L4 sleep (most advanced)
+  if(field === 'water') return p.level >= 2;
+  if(field === 'weight' || field === 'waist') return p.level >= 3;
+  if(field === 'sleep') return p.level >= 4;
   return true;
 }
 function applyCheckinTrackingUI(u){
@@ -1791,31 +1803,26 @@ function applyCheckinTrackingUI(u){
   const sleep = document.getElementById('ciCardSleep');
   const water = document.getElementById('ciCardWater');
   if(body) body.style.display = trackingAllows('weight', u) ? '' : 'none';
-  if(steps) steps.style.display = trackingAllows('steps', u) ? '' : 'none';
+  if(steps) steps.style.display = 'none';
   if(sleep) sleep.style.display = trackingAllows('sleep', u) ? '' : 'none';
   if(water) water.style.display = trackingAllows('water', u) ? '' : 'none';
   if(sub){
-    if(p.mode === 'full') sub.textContent = 'Full tracking · scale + daily logs (food in your diet app)';
-    else sub.textContent = 'Beginner path · level '+p.level+' of 4 — only what your coach unlocked';
+    if(p.mode === 'full') sub.textContent = 'Full tracking · scale, water, sleep · steps via Step Up';
+    else sub.textContent = 'Beginner · level '+p.level+' of 4 — only what your coach unlocked';
   }
   if(banner){
     banner.style.display = 'block';
     if(p.mode === 'full'){
-      banner.innerHTML = '<strong style="color:var(--grn)">Full tracking</strong> — scale for weight/waist. Food in MyNetDiary (or your diet app). This app: body, steps, sleep, water, training.';
+      banner.innerHTML = '<strong style="color:var(--grn)">Full tracking</strong> — weight, waist, water, sleep in this app. Steps in <em>Step Up</em> (coach enters weekly total). Food in MyNetDiary.';
     } else {
       const tips = {
-        1: 'Level 1 — show up. No scale required. Share food photos with your coach; small changes only.',
-        2: 'Level 2 — add steps when you can. Still no scale required.',
-        3: 'Level 3 — steps, water, and sleep. Build the daily rhythm.',
-        4: 'Level 4 — scale unlocked (weight & waist). Close to full tracking.'
+        1: 'Level 1 — show up. Food photos with your coach. Steps live in Step Up.',
+        2: 'Level 2 — water unlocked. Keep steps in Step Up.',
+        3: 'Level 3 — scale unlocked (morning weight & waist).',
+        4: 'Level 4 — sleep unlocked (most advanced daily log).'
       };
       banner.innerHTML = '<strong style="color:var(--grn)">Beginner tracking</strong> — '+(tips[p.level]||tips[1]);
     }
-  }
-  if(p.mode === 'beginner' && p.level === 1 && steps){
-    steps.style.display = '';
-    const hint = document.getElementById('ciStHint');
-    if(hint) hint.textContent = 'Optional — even a short walk counts. You can save with just steps or an empty log.';
   }
 }
 async function saveClientTrackingMode(email){
@@ -1857,8 +1864,8 @@ function initCI(){
   try{ applyCheckinTrackingUI(CU); }catch(e){}
   // Pre-fill last known weight/waist
   if(ci.length){const l=ci[ci.length-1];if(l.weight){document.getElementById('ciWt').value=l.weight;document.getElementById('ciWtL').textContent=l.weight+' kg';}if(l.waist){document.getElementById('ciWa').value=l.waist;document.getElementById('ciWaL').textContent=l.waist+' in';}}
-  document.getElementById('ciSt').value='';document.getElementById('ciStL').textContent='0';
-  document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
+  try{ const st=document.getElementById('ciSt'); if(st) st.value=''; const stL=document.getElementById('ciStL'); if(stL) stL.textContent='0'; }catch(e){}
+  try{ const sl=document.getElementById('sleepR'); if(sl) sl.value=7; const slL=document.getElementById('ciSlL'); if(slL) slL.textContent='7.0 hrs'; }catch(e){}
   document.getElementById('hungR').value=5;onHu(5);
   document.getElementById('ciNotes').value='';
   proteinPct=null;workoutDone=null;sleepQual=null;
@@ -2004,7 +2011,7 @@ function userGoals(u){
   u = u || CU || {};
   return {
     waterMl: Math.max(500, parseInt(u.waterTargetMl,10) || WATER_TARGET_ML || 3000),
-    steps: Math.max(1000, parseInt(u.stepsTarget,10) || 10000),
+    steps: Math.max(5000, parseInt(u.stepsTarget,10) || 70000),
     sleep: Math.max(4, parseFloat(u.sleepTarget) || 7),
     waistUnit: 'in'
   };
@@ -2076,7 +2083,7 @@ async function saveMyGoals(){
   const unit = (document.getElementById('goalWaistUnit')||{}).value || 'in';
   const patch = {
     waterTargetMl: isNaN(w)?3000:w,
-    stepsTarget: isNaN(s)?10000:s,
+    stepsTarget: isNaN(s)?70000:s,
     sleepTarget: isNaN(sl)?7:sl,
     waistUnit: 'in'
   };
@@ -2148,7 +2155,7 @@ function renderRemindPrompt(u){
     wrap.innerHTML = `<div class="alert-card info">
       <strong>🔔 Turn on daily reminders</strong><br>
       Get a morning and evening prompt to log. This stays here until notifications are on.
-      <div style="font-size:12px;color:var(--gry);margin-top:6px">6:30am weight &amp; waist · 9:00pm steps, water &amp; sleep</div>
+      <div style="font-size:12px;color:var(--gry);margin-top:6px">6:30am weight &amp; waist · 9:00pm water</div>
       <div class="alert-actions">
         <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders()">Enable notifications</button>
       </div>
@@ -2245,7 +2252,7 @@ function renderWeekCountsCard(hostId, u, ci, wkts, opts){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${cell('Weighed', c.daysWeighed+'/7', wtSub)}
       ${cell('Waist', c.daysWaist+'/7', waSub)}
-      ${cell('Steps logged', c.daysStepsLogged+'/7', c.daysStepsMet+' hit target')}
+      ${cell('Steps', 'Step Up', 'weekly in message')}
       ${cell('Water', c.daysWaterLogged+'/7', (c.daysWaterMet+' hit target')+(wSub?' · '+wSub:''))}
       ${cell('Sleep', c.daysSleep+'/7', '')}
       ${cell('Training', c.trainingPct+'%', c.workouts+' / '+c.prescribed+' days')}
@@ -2353,7 +2360,7 @@ function renderAdminRiskAndBulk(){
 async function saveCI(){
   if(!CU)return;
   if(VIEWUSER){ toast('🔒 Coach view is read-only — clients log their own check-ins','a'); return; }
-  if(CU.status==='pending'){toast('⏳ Your account is awaiting coach approval — check-ins are locked until then.','a');return;}
+  // pending no longer blocks check-ins
   const allowW = trackingAllows('weight', CU);
   const allowWa = trackingAllows('waist', CU);
   const allowSt = trackingAllows('steps', CU);
@@ -2605,7 +2612,7 @@ function toggleSetDone(ei, si){
 async function saveWorkoutProgress(quiet){
   if(!CU) return;
   if(VIEWUSER){ if(!quiet) toast('Coach view is read-only','a'); return; }
-  if(CU.status==='pending'){ if(!quiet) toast('Awaiting approval','a'); return; }
+  // pending no longer blocks workout progress save
   const u = CU;
   const titleEl = document.getElementById('wktTitleIn');
   const dateEl = document.getElementById('wktDateIn');
@@ -2806,7 +2813,7 @@ function workoutIncompleteSummary(){
 async function saveWorkout(){
   if(!CU)return;
   if(_savingWorkout){ toast('Saving… please wait','a'); return; }
-  if(CU.status==='pending'&&!VIEWUSER){toast('⏳ Your account is awaiting coach approval.','a');return;}
+  // pending no longer blocks finish session
   const u=VIEWUSER||CU;
   const title=document.getElementById('wktTitleIn').value.trim();
   const d=document.getElementById('wktDateIn').value||today();
@@ -3422,7 +3429,7 @@ function startWorkoutFromProgramDay(programId,dayId, opts){
 /** Open logger for the next program session — no day picking */
 function openNextTrainSession(){
   if(!CU) return false;
-  if(CU.status==='pending' && !VIEWUSER) return false;
+  // pending no longer blocks
   const u = VIEWUSER||CU;
   const st = myAssignedProgramState();
   if(st.state!=='ready' || !st.prog) return false;
@@ -4063,13 +4070,8 @@ function renderDash(){
   // Pending notice
   const pend=document.getElementById('pendingNotice');
   const cont=document.getElementById('dashContent');
-  if(u.status==='pending'&&!VIEWUSER){
-    pend.style.display='block';
-    cont.style.opacity='0.4';cont.style.pointerEvents='none';
-  } else {
-    pend.style.display='none';
-    cont.style.opacity='1';cont.style.pointerEvents='auto';
-  }
+  if(pend) pend.style.display='none';
+  if(cont){ cont.style.opacity='1'; cont.style.pointerEvents='auto'; }
 
   const ci=myCI();
   const wkts=myWorkouts();
@@ -4470,9 +4472,70 @@ async function saveClientPhone(email){
   }catch(e){console.error(e);toast('Could not save phone','r');}
 }
 
+
+function renderCoachSelfTracking(){
+  if(!CU || CU.role!=='admin') return;
+  let host = document.getElementById('coachSelfTracking');
+  if(!host){
+    host = document.createElement('div');
+    host.id = 'coachSelfTracking';
+    const mount = document.getElementById('adminProgramsMount') || document.getElementById('scr-admin');
+    if(mount) mount.parentNode ? mount.parentNode.insertBefore(host, mount) : null;
+    const adminScr = document.getElementById('scr-admin');
+    if(adminScr && !host.parentNode){
+      const first = adminScr.querySelector('.card, #adminProgramsMount, #membersList');
+      if(first) first.parentNode.insertBefore(host, first);
+      else adminScr.appendChild(host);
+    }
+  }
+  const mode = CU.trackingMode === 'beginner' ? 'beginner' : 'full';
+  const level = Math.min(4, Math.max(1, parseInt(CU.trackingLevel,10)||1));
+  host.innerHTML = `<div class="card" style="margin-bottom:14px;padding:12px 14px;border-color:rgba(255,214,0,.3)">
+    <div style="font-size:11px;font-weight:800;color:var(--grn);letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px">My tracking (coach)</div>
+    <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Same levels as clients — switch yourself anytime.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select class="prog-select-sm" id="coachModeSelf">
+        <option value="beginner" ${mode==='beginner'?'selected':''}>Beginner</option>
+        <option value="full" ${mode==='full'?'selected':''}>Full</option>
+      </select>
+      <select class="prog-select-sm" id="coachLevelSelf">
+        <option value="1" ${level===1?'selected':''}>L1 · Show up</option>
+        <option value="2" ${level===2?'selected':''}>L2 · Water</option>
+        <option value="3" ${level===3?'selected':''}>L3 · Scale (weight/waist)</option>
+        <option value="4" ${level===4?'selected':''}>L4 · Sleep (advanced)</option>
+      </select>
+      <button class="approve-btn" style="padding:6px 12px;font-size:11px" onclick="saveCoachSelfTracking()">Save my level</button>
+    </div>
+  </div>`;
+}
+async function saveCoachSelfTracking(){
+  if(!CU||CU.role!=='admin')return;
+  const modeEl = document.getElementById('coachModeSelf');
+  const lvlEl = document.getElementById('coachLevelSelf');
+  let mode = modeEl ? modeEl.value : 'full';
+  let level = lvlEl ? parseInt(lvlEl.value,10) : 4;
+  if(mode==='full') level = 4;
+  if(isNaN(level)||level<1) level=1;
+  if(level>4) level=4;
+  const email = String(CU.email||'').toLowerCase();
+  try{
+    await fdb.collection('users').doc(email).set({trackingMode:mode, trackingLevel:level},{merge:true});
+    CU.trackingMode = mode;
+    CU.trackingLevel = level;
+    if(CACHE.users[email]){ CACHE.users[email].trackingMode=mode; CACHE.users[email].trackingLevel=level; }
+    toast(mode==='full'?'Your tracking: Full':'Your tracking: Beginner L'+level,'g');
+    try{ applyCheckinTrackingUI(CU); }catch(e){}
+    try{ renderCoachSelfTracking(); }catch(e){}
+  }catch(e){
+    console.error(e);
+    toast('Could not save your tracking level','r');
+  }
+}
+
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
   try{ refreshAdminAppLink(); }catch(e){}
+  try{ renderCoachSelfTracking(); }catch(e){}
   try{ renderAdminRiskAndBulk(); }catch(e){}
   const d=gDB();
   // Dedupe by email (avoid double entries from casing/id mismatch). Prefer approved > pending.
@@ -4626,6 +4689,10 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             <input class="fi" style="font-size:12px;padding:8px" id="wkPro-${id}" type="number" min="0" max="7" placeholder="0–7" value="${u.lastMndProteinDays!=null?u.lastMndProteinDays:''}"></div>
           <div><div class="fl" style="font-size:10px">Food log days (MND)</div>
             <input class="fi" style="font-size:12px;padding:8px" id="wkFood-${id}" type="number" min="0" max="7" placeholder="0–7" value="${u.lastMndFoodDays!=null?u.lastMndFoodDays:''}"></div>
+          <div><div class="fl" style="font-size:10px">Weekly steps (Step Up)</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkSteps-${id}" type="number" min="0" placeholder="e.g. 52000" value="${u.lastWeeklySteps!=null?u.lastWeeklySteps:''}"></div>
+          <div><div class="fl" style="font-size:10px">Weekly steps target</div>
+            <input class="fi" style="font-size:12px;padding:8px" id="wkStepsT-${id}" type="number" min="0" placeholder="e.g. 70000" value="${u.stepsTarget!=null?u.stepsTarget:70000}"></div>
         </div>
         <div style="margin-bottom:8px"><div class="fl" style="font-size:10px">Optional note from you</div>
           <textarea class="fi" style="min-height:52px;font-size:12px;width:100%" id="wkNote-${id}" placeholder="Extra feedback (optional)">${escHtml(u.coachNote||'')}</textarea></div>
@@ -4664,9 +4731,9 @@ const renderAdmin = requireAdmin(function renderAdmin(){
               </select>
               <select class="prog-select-sm" id="tgLevel-${id}" style="opacity:${u.trackingMode==='full'?'0.4':'1'}">
                 <option value="1" ${Number(u.trackingLevel||1)===1?'selected':''}>L1 · Show up</option>
-                <option value="2" ${Number(u.trackingLevel)===2?'selected':''}>L2 · Steps</option>
-                <option value="3" ${Number(u.trackingLevel)===3?'selected':''}>L3 · Water + sleep</option>
-                <option value="4" ${Number(u.trackingLevel)===4?'selected':''}>L4 · Scale (weight/waist)</option>
+                <option value="2" ${Number(u.trackingLevel)===2?'selected':''}>L2 · Water</option>
+                <option value="3" ${Number(u.trackingLevel)===3?'selected':''}>L3 · Scale (weight/waist)</option>
+                <option value="4" ${Number(u.trackingLevel)===4?'selected':''}>L4 · Sleep (advanced)</option>
               </select>
               <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientTrackingMode('${u.email}')">Save mode</button>
             </div>
@@ -4693,7 +4760,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">Targets</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
               <div><div class="fl" style="font-size:10px">Water (ml)</div><input class="fi" style="font-size:12px;padding:8px" id="tgW-${id}" type="number" value="${u.waterTargetMl||3000}"></div>
-              <div><div class="fl" style="font-size:10px">Steps</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||10000}"></div>
+              <div><div class="fl" style="font-size:10px">Weekly steps target</div><input class="fi" style="font-size:12px;padding:8px" id="tgS-${id}" type="number" value="${u.stepsTarget||70000}"></div>
               <div><div class="fl" style="font-size:10px">Sleep (hrs)</div><input class="fi" style="font-size:12px;padding:8px" id="tgSl-${id}" type="number" step="0.5" value="${u.sleepTarget||7}"></div>
             </div>
             <button class="approve-btn" style="margin-top:8px;padding:6px 12px;font-size:11px" onclick="saveCoachTargets('${u.email}')">Save targets</button>
@@ -5341,7 +5408,7 @@ function tickDailyReminders(){
     const missSleep = !todayRow || todayRow.sleep==null || todayRow.sleep==='';
     if(missSteps || missWater || missSleep || !todayRow){
       try{
-        new Notification('Shredlane', { body: 'Evening check-in — log steps, water, and sleep before bed.', tag: 'sl-pm' });
+        new Notification('Shredlane', { body: 'Evening check-in — log water (sleep if unlocked). Steps stay in Step Up.', tag: 'sl-pm' });
         localStorage.setItem(key,'1');
       }catch(e){}
     } else {
@@ -5521,10 +5588,14 @@ function buildWeeklyClientMessage(email){
   const id = _weeklyMsgDomId(email);
   const proEl = document.getElementById('wkPro-'+id);
   const foodEl = document.getElementById('wkFood-'+id);
+  const stepsEl = document.getElementById('wkSteps-'+id);
+  const stepsTEl = document.getElementById('wkStepsT-'+id);
   const guarEl = document.getElementById('wkGuar-'+id);
   const noteEl = document.getElementById('wkNote-'+id);
   const pro = proEl && proEl.value !== '' ? Number(proEl.value) : null;
   const food = foodEl && foodEl.value !== '' ? Number(foodEl.value) : null;
+  const weekSteps = stepsEl && stepsEl.value !== '' ? Number(stepsEl.value) : (u.lastWeeklySteps!=null?Number(u.lastWeeklySteps):null);
+  const weekStepsTarget = stepsTEl && stepsTEl.value !== '' ? Number(stepsTEl.value) : (Number(u.stepsTarget)||70000);
   const guar = guarEl ? (guarEl.value||'') : '';
   const note = noteEl ? (noteEl.value||'').trim() : '';
   const first = (u.name||'there').split(' ')[0];
@@ -5562,7 +5633,7 @@ function buildWeeklyClientMessage(email){
     {key:'water', label:'Water at target', pct: Math.round((c.daysWaterMet/7)*100), priority: 10,
       tip:'Hit your water target at least 5 days next week. This is often the fastest adherence win.',
       detail: function(){ return c.daysWaterMet+' of 7 days at target (logged '+c.daysWaterLogged+'/7).'; }},
-    {key:'steps', label:'Steps at target', pct: Math.round((c.daysStepsMet/7)*100), priority: 9,
+    {key:'steps', label:'Weekly steps', pct: (weekSteps!=null && weekStepsTarget>0) ? Math.min(100, Math.round((weekSteps/weekStepsTarget)*100)) : 0, priority: 9,
       tip:'Hit your step target at least 5 days next week.',
       detail: function(){ return c.daysStepsMet+' of 7 days at target (logged '+c.daysStepsLogged+'/7).'; }},
     {key:'training', label:'Training', pct: c.trainingPct, priority: 10,
@@ -5645,7 +5716,7 @@ function buildWeeklyClientMessage(email){
   parts.push('*THIS WEEK*');
   parts.push('Weighed in: '+c.daysWeighed+' of 7 days · *'+(c.daysWeighed>=5?'on track':'needs more days')+'*');
   parts.push('Waist: '+c.daysWaist+' of 7 days · *'+(c.daysWaist>=5?'on track':'needs more days')+'*');
-  parts.push(metLine(c.daysStepsLogged, c.daysStepsMet, 'Steps'));
+  if(weekSteps!=null){ const hit=weekStepsTarget>0&&weekSteps>=weekStepsTarget; parts.push('Steps (week): '+weekSteps.toLocaleString()+(weekStepsTarget?(' / '+Number(weekStepsTarget).toLocaleString()):'')+(hit?' · target met':' · under target')); } else { parts.push('Steps (week): not entered (Step Up)'); }
   parts.push(metLine(c.daysWaterLogged, c.daysWaterMet, 'Water'));
   parts.push(metLine(c.daysSleep, (c.daysSleepMet!=null?c.daysSleepMet:c.daysSleep), 'Sleep'));
   const trainStatus = c.trainingPct>=85 ? 'on target' : (c.trainingPct===0 ? 'target not met' : 'below target');
@@ -5843,16 +5914,22 @@ function sendWeeklyClientMessage(email){
   const id = _weeklyMsgDomId(email);
   const pre = document.getElementById('wkPreview-'+id);
   if(pre){ pre.style.display='block'; pre.textContent=body; }
-  // Remember MyNetDiary numbers for next week
+  // Remember MyNetDiary + weekly Step Up numbers for next week
   try{
     const id = _weeklyMsgDomId(email);
     const proEl = document.getElementById('wkPro-'+id);
     const foodEl = document.getElementById('wkFood-'+id);
+    const stepsEl = document.getElementById('wkSteps-'+id);
+    const stepsTEl = document.getElementById('wkStepsT-'+id);
     const pro = proEl && proEl.value !== '' ? Number(proEl.value) : null;
     const food = foodEl && foodEl.value !== '' ? Number(foodEl.value) : null;
+    const wkSt = stepsEl && stepsEl.value !== '' ? Number(stepsEl.value) : null;
+    const wkStT = stepsTEl && stepsTEl.value !== '' ? Number(stepsTEl.value) : null;
     const payload = {};
     if(pro!=null && !isNaN(pro)) payload.lastMndProteinDays = pro;
     if(food!=null && !isNaN(food)) payload.lastMndFoodDays = food;
+    if(wkSt!=null && !isNaN(wkSt)) payload.lastWeeklySteps = wkSt;
+    if(wkStT!=null && !isNaN(wkStT)){ payload.lastWeeklyStepsTarget = wkStT; payload.stepsTarget = wkStT; }
     if(Object.keys(payload).length){
       fdb.collection('users').doc(email).set(payload,{merge:true}).catch(()=>{});
       if(CACHE.users[email]) Object.assign(CACHE.users[email], payload);
@@ -6380,7 +6457,7 @@ async function uploadToCloudinary(file, folder){
 
 async function savePhotos(){
   if(!CU) return;
-  if(CU.status==='pending'){ toast('⏳ Awaiting approval','a'); return; }
+  // pending no longer blocks photos
   const hasAny = photoFiles.front || photoFiles.side || photoFiles.back;
   if(!hasAny){ toast('Select at least one photo','r'); return; }
 
