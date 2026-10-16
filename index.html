@@ -674,7 +674,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <div class="field"><label>Starting Waist (inches)</label><input class="fi" type="text" id="rWa" placeholder="e.g. 36.5" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" autocomplete="off"></div>
       <button class="a-btn" onclick="doRegister()">Create Account →</button>
       <div class="a-err" id="rErr"></div>
-      <div class="a-note">By registering you confirm you are an active Shredlane client. Your account requires coach approval before you can access the app.</div>
+      <div class="a-note">By registering you confirm you are a Shredlane client. Your account is ready as soon as you create it.</div>
     </div>
   </div>
 </div>
@@ -1117,7 +1117,7 @@ function normalizeStatus(s){
   if(s==='approve'||s==='active'||s==='member') return 'approved';
   if(s==='pend'||s==='waiting') return 'pending';
   if(s==='archive'||s==='archived'||s==='inactive') return 'archived';
-  return s || 'pending';
+  return s || 'approved';
 }
 /** Find the real Firestore users/{docId} for an email (handles casing / id mismatch) */
 function resolveUserDocId(email){
@@ -1183,15 +1183,25 @@ firebase.auth().onAuthStateChanged(async (user) => {
         if(local && (local.email||'').toLowerCase()===email) profile = local;
       }
       if(profile){
-        if(profile.status === 'approved'){
+        const st = normalizeStatus(profile.status);
+        // Archived / rejected stay blocked; everyone else is active (no coach approval)
+        if(st === 'archived' || st === 'rejected'){
+          clearProfileLocal();
+          await firebase.auth().signOut();
+          toast('This account is not active. Contact your coach.','a');
+        } else {
+          if(st === 'pending' || !profile.status){
+            profile.status = 'approved';
+            profile.approvedAt = profile.approvedAt || Date.now();
+            try{
+              const em = String(profile.email||email||'').toLowerCase();
+              if(em) fdb.collection('users').doc(em).set({status:'approved', approvedAt:profile.approvedAt},{merge:true}).catch(function(){});
+            }catch(e){}
+          }
           CU = profile;
           cacheProfileLocal(profile);
           onSuccess(profile, {silent: _sessionRestored});
           _sessionRestored = true;
-        } else {
-          clearProfileLocal();
-          await firebase.auth().signOut();
-          toast('Your account is pending admin approval.','a');
         }
       } else {
         // Only sign out if we are online and the account truly missing
@@ -5467,7 +5477,7 @@ function shareAppLinkWhatsApp(){
     '',
     link,
     '',
-    'Open the link, create your account, then wait for coach approval.'
+    'Open the link, create your account, and start right away.'
   ].join('\n');
   try{ navigator.clipboard.writeText(body); }catch(e){}
   window.open('https://wa.me/?text='+encodeURIComponent(body), '_blank');
