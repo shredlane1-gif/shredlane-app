@@ -820,7 +820,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- CHECK-IN -->
   <div class="scr" id="scr-checkin">
     <div class="scr-ttl">DAILY CHECK-IN</div>
-    <div class="scr-sub" id="ciSub">Weight, waist, steps, sleep &amp; water — keep it simple</div>
+    <div class="scr-sub" id="ciSub">Weight &amp; waist (weekly) · water any day</div>
     <div id="ciModeBanner" style="display:none;margin-bottom:12px;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,214,0,.3);background:rgba(255,214,0,.06);font-size:13px;line-height:1.45;color:var(--txt)"></div>
 
     <!-- DATE PICKER -->
@@ -1065,7 +1065,6 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 // ═══════════════════════════════════════
 const DB_KEY = 'sl_v3';
 const COLORS = ['#FFD600','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316'];
-const HU_LBL = {1:'Full',2:'Satisfied',3:'Slightly hungry',4:'Peckish',5:'Moderate',6:'Getting hungry',7:'Quite hungry',8:'Very hungry',9:'Extremely hungry',10:'Starving'};
 
 // ═══════════════════════════════════════
 // FIREBASE — SHARED CLOUD DATABASE
@@ -1454,7 +1453,7 @@ async function doRegister(){
   try{
     await firebase.auth().createUserWithEmailAndPassword(em,pw);
     const phone=normalizePhone(phoneRaw);
-    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,phone:phone||null,role:'member',status:'approved',joined:today(),approvedAt:Date.now(),trackingMode:'beginner',trackingLevel:1};
+    const user={name:nm,email:em,goal:gl,baseWeight:wt,baseWaist:wa,phone:phone||null,role:'member',status:'approved',joined:today(),approvedAt:Date.now(),weighInFrequency:'weekly'};
     await fdb.collection('users').doc(em).set(user);
     CACHE.users[em]=user;
     // Stay signed in — account is active immediately (auth listener will open the app)
@@ -1727,7 +1726,7 @@ function pickDate(ds){
     // Clear form for new past entry
     try{ const st=document.getElementById('ciSt'); if(st) st.value=''; const stL=document.getElementById('ciStL'); if(stL) stL.textContent='0'; }catch(e){}
     document.getElementById('sleepR').value=7;document.getElementById('ciSlL').textContent='7.0 hrs';
-    document.getElementById('hungR').value=5;onHu(5);
+    document.getElementById('hungR').value=5;
     document.getElementById('ciNotes').value='';
     proteinPct=null;workoutDone=null;sleepQual=null;
     setProtein(null);setWorkout(null);setSleepQual(null);
@@ -1777,91 +1776,92 @@ function setCheckinCoachLock(){
 }
 
 
-// ── Tracking mode: beginner (progressive) vs full (scale + diet app) ──
-function getTrackingProfile(u){
+// ── Body metrics: weekly (default / beginners) or daily ──
+function weighInFrequency(u){
   u = u || CU;
-  if(!u) return { mode:'full', level:4 };
-  // Legacy clients with no field → full (keep current behaviour)
-  // New clients register as beginner L1
-  const explicit = u.trackingMode;
-  const mode = explicit === 'beginner' ? 'beginner' : (explicit === 'full' ? 'full' : 'full');
-  let level = parseInt(u.trackingLevel, 10);
-  if(isNaN(level) || level < 1) level = 1;
-  if(level > 4) level = 4;
-  if(mode === 'full') level = 4;
-  return { mode, level };
+  if(!u) return 'weekly';
+  if(u.weighInFrequency === 'daily') return 'daily';
+  if(u.trackingMode === 'full') return 'daily'; // legacy
+  return 'weekly';
 }
-function trackingAllows(field, u){
-  const p = getTrackingProfile(u);
-  // Daily steps removed — Step Up + coach weekly total in the message
-  if(field === 'steps') return false;
-  if(p.mode === 'full') return true;
-  // Beginner ladder (only taught items):
-  // L1 show up · L2 water · L3 scale · L4 sleep (most advanced)
-  if(field === 'water') return p.level >= 2;
-  if(field === 'weight' || field === 'waist') return p.level >= 3;
-  if(field === 'sleep') return p.level >= 4;
-  return true;
+function weekStartStr(d){
+  const dt = new Date((d||today())+'T12:00:00');
+  const day = (dt.getDay()+6)%7;
+  dt.setDate(dt.getDate()-day);
+  return dt.toISOString().slice(0,10);
+}
+function hasWeighInThisWeek(u, exceptDate){
+  const start = weekStartStr(exceptDate||today());
+  const endDt = new Date(start+'T12:00:00'); endDt.setDate(endDt.getDate()+6);
+  const end = endDt.toISOString().slice(0,10);
+  let entries = (typeof myCI==='function') ? myCI() : [];
+  const email = (u && u.email) ? String(u.email).toLowerCase() : '';
+  if((!entries || !entries.length) && email && CACHE.checkins){
+    entries = CACHE.checkins[email] || [];
+  }
+  return (entries||[]).filter(c=>{
+    if(!c || !c.date) return false;
+    if(exceptDate && c.date === exceptDate) return false;
+    if(c.date < start || c.date > end) return false;
+    const hasW = c.weight!=null && c.weight!=='' && !isNaN(Number(c.weight));
+    const hasA = c.waist!=null && c.waist!=='' && !isNaN(Number(c.waist));
+    return hasW || hasA;
+  });
 }
 function applyCheckinTrackingUI(u){
   u = u || CU;
-  const p = getTrackingProfile(u);
+  const freq = weighInFrequency(u);
   const banner = document.getElementById('ciModeBanner');
   const sub = document.getElementById('ciSub');
   const body = document.getElementById('ciCardBody');
   const steps = document.getElementById('ciCardSteps');
   const sleep = document.getElementById('ciCardSleep');
   const water = document.getElementById('ciCardWater');
-  if(body) body.style.display = trackingAllows('weight', u) ? '' : 'none';
+  if(body) body.style.display = '';
+  if(water) water.style.display = '';
   if(steps) steps.style.display = 'none';
-  if(sleep) sleep.style.display = trackingAllows('sleep', u) ? '' : 'none';
-  if(water) water.style.display = trackingAllows('water', u) ? '' : 'none';
+  if(sleep) sleep.style.display = 'none';
   if(sub){
-    if(p.mode === 'full') sub.textContent = 'Full tracking · scale, water, sleep · steps via Step Up';
-    else sub.textContent = 'Beginner · level '+p.level+' of 4 — only what your coach unlocked';
+    sub.textContent = freq === 'daily'
+      ? 'Weight, waist & water · daily when needed'
+      : 'Weight & waist once a week · water any day';
   }
   if(banner){
     banner.style.display = 'block';
-    if(p.mode === 'full'){
-      banner.innerHTML = '<strong style="color:var(--grn)">Full tracking</strong> — weight, waist, water, sleep in this app. Steps in <em>Step Up</em> (coach enters weekly total). Food in MyNetDiary.';
+    if(freq === 'weekly'){
+      const existing = hasWeighInThisWeek(u, null);
+      if(existing.length){
+        banner.innerHTML = '<strong style="color:var(--grn)">Weekly weigh-in</strong> — Body metrics already logged this week ('+existing[0].date+'). You can still log <em>water</em> any day.';
+      } else {
+        banner.innerHTML = '<strong style="color:var(--grn)">Simple log</strong> — Weight & waist once this week. Water whenever you want. Empty fields are OK.';
+      }
     } else {
-      const tips = {
-        1: 'Level 1 — show up. Food photos with your coach. Steps live in Step Up.',
-        2: 'Level 2 — water unlocked. Keep steps in Step Up.',
-        3: 'Level 3 — scale unlocked (morning weight & waist).',
-        4: 'Level 4 — sleep unlocked (most advanced daily log).'
-      };
-      banner.innerHTML = '<strong style="color:var(--grn)">Beginner tracking</strong> — '+(tips[p.level]||tips[1]);
+      banner.innerHTML = '<strong style="color:var(--grn)">Daily log</strong> — Weight, waist & water when you can. Empty fields are allowed.';
     }
   }
 }
-async function saveClientTrackingMode(email){
+async function saveClientWeighInFreq(email){
   if(!CU||CU.role!=='admin')return;
   email = String(email||'').trim().toLowerCase();
   const id = email.replace(/[^a-zA-Z0-9]/g,'_');
-  const modeEl = document.getElementById('tgMode-'+id);
-  const lvlEl = document.getElementById('tgLevel-'+id);
-  const mode = modeEl ? modeEl.value : 'beginner';
-  let level = lvlEl ? parseInt(lvlEl.value,10) : 1;
-  if(mode === 'full') level = 4;
-  if(isNaN(level)||level<1) level = 1;
-  if(level>4) level = 4;
+  const el = document.getElementById('tgWeighFreq-'+id);
+  const freq = el && el.value === 'daily' ? 'daily' : 'weekly';
   try{
     const docId = typeof resolveUserDocId==='function' ? resolveUserDocId(email) : email;
-    await fdb.collection('users').doc(docId).set({ trackingMode: mode, trackingLevel: level }, { merge:true });
+    await fdb.collection('users').doc(docId).set({ weighInFrequency: freq }, { merge:true });
     Object.entries(CACHE.users||{}).forEach(([docId2,u])=>{
       if(String((u&&u.email)||docId2).toLowerCase()===email){
-        CACHE.users[docId2].trackingMode = mode;
-        CACHE.users[docId2].trackingLevel = level;
+        CACHE.users[docId2].weighInFrequency = freq;
       }
     });
-    toast(mode==='full'?'Full tracking on':'Beginner level '+level+' saved','g');
+    toast(freq==='daily'?'Daily weigh-in on':'Weekly weigh-in on','g');
     try{ renderAdmin(); }catch(e){}
   }catch(e){
     console.error(e);
-    toast('Could not save tracking mode','r');
+    toast('Could not save weigh-in setting','r');
   }
 }
+
 
 function initCI(){
   selectedDate = today();
@@ -1876,7 +1876,7 @@ function initCI(){
   if(ci.length){const l=ci[ci.length-1];if(l.weight){document.getElementById('ciWt').value=l.weight;document.getElementById('ciWtL').textContent=l.weight+' kg';}if(l.waist){document.getElementById('ciWa').value=l.waist;document.getElementById('ciWaL').textContent=l.waist+' in';}}
   try{ const st=document.getElementById('ciSt'); if(st) st.value=''; const stL=document.getElementById('ciStL'); if(stL) stL.textContent='0'; }catch(e){}
   try{ const sl=document.getElementById('sleepR'); if(sl) sl.value=7; const slL=document.getElementById('ciSlL'); if(slL) slL.textContent='7.0 hrs'; }catch(e){}
-  document.getElementById('hungR').value=5;onHu(5);
+  document.getElementById('hungR').value=5;
   document.getElementById('ciNotes').value='';
   proteinPct=null;workoutDone=null;sleepQual=null;
   setProtein(null);setWorkout(null);setSleepQual(null);
@@ -1885,64 +1885,13 @@ function initCI(){
   try{ setCheckinCoachLock(); }catch(e){}
 }
 
-function onSt(v){const n=parseInt(v)||0;document.getElementById('ciStL').textContent=n.toLocaleString();renderSpeedo(n);}
-function onHu(v){v=parseInt(v);document.getElementById('ciHuL').textContent=v+' — '+(HU_LBL[v]||'');}
 
-// ── Protein compliance scale ──
-let proteinPct=null; // 0,25,50,75,100 or null
-function setProtein(val){
-  proteinPct=val;
-  [0,25,50,75,100].forEach(v=>{
-    const b=document.getElementById('pro'+v);
-    if(!b)return;
-    b.classList.remove('sel-red','sel-amber','sel-grn');
-    if(v===val){
-      if(v<=25)b.classList.add('sel-red');
-      else if(v<=75)b.classList.add('sel-amber');
-      else b.classList.add('sel-grn');
-    }
-  });
-}
+// Legacy stubs (UI removed)
+let proteinPct=null, workoutDone=null, sleepQual=null;
+function setProtein(val){ proteinPct=val; }
+function setWorkout(val){ workoutDone=val; }
+function setSleepQual(val){ sleepQual=val; }
 
-// ── Workout yes/no ──
-let workoutDone=null; // true/false/null
-function setWorkout(val){
-  workoutDone=val;
-  const no=document.getElementById('wktNo'),yes=document.getElementById('wktYes');
-  if(!no||!yes)return;
-  no.classList.remove('sel-no','sel-yes');
-  yes.classList.remove('sel-no','sel-yes');
-  if(val===false)no.classList.add('sel-no');
-  if(val===true)yes.classList.add('sel-yes');
-}
-
-// ── Sleep quality ──
-let sleepQual=null; // 0=Poor,1=Fair,2=Good,3=Great
-const SQ_LABELS=['Poor','Fair','Good','Great'];
-function setSleepQual(val){
-  sleepQual=val;
-  [0,1,2,3].forEach(v=>{
-    const b=document.getElementById('sq'+v);
-    if(!b)return;
-    b.classList.remove('sel-red','sel-amber','sel-grn');
-    if(v===val){
-      if(v<=0)b.classList.add('sel-red');
-      else if(v<=1)b.classList.add('sel-amber');
-      else b.classList.add('sel-grn');
-    }
-  });
-}
-
-function renderHabits(){
-  // Re-apply stored state to buttons
-  if(proteinPct!==null)setProtein(proteinPct);
-  if(workoutDone!==null)setWorkout(workoutDone);
-  if(sleepQual!==null)setSleepQual(sleepQual);
-}
-
-// ── Water intake in millilitres (old glass counts auto-convert on load) ──
-const WATER_TARGET_ML = 3000;
-const WATER_GLASS_ML = 250; // only for migrating old 1–15 "glasses" values
 let waterCount = 0; // millilitres
 
 
@@ -2370,23 +2319,22 @@ function renderAdminRiskAndBulk(){
 async function saveCI(){
   if(!CU)return;
   if(VIEWUSER){ toast('🔒 Coach view is read-only — clients log their own check-ins','a'); return; }
-  // pending no longer blocks check-ins
-  const allowW = trackingAllows('weight', CU);
-  const allowWa = trackingAllows('waist', CU);
-  const allowSt = trackingAllows('steps', CU);
-  const allowSl = trackingAllows('sleep', CU);
-  const allowWater = trackingAllows('water', CU);
   const wtRaw = document.getElementById('ciWt') ? document.getElementById('ciWt').value : '';
   const waRaw = document.getElementById('ciWa') ? document.getElementById('ciWa').value : '';
-  const wt = allowW ? parseDec(wtRaw) : null;
-  const wa = allowWa ? waistToStorage(waRaw, 'in') : null;
-  const st = allowSt ? (parseInt((document.getElementById('ciSt')||{}).value,10)||0) : 0;
-  const sl = allowSl ? parseFloat((document.getElementById('sleepR')||{}).value) : null;
-  const waterVal = allowWater ? waterCount : 0;
+  const wt = parseDec(wtRaw);
+  const wa = waistToStorage(waRaw, 'in');
+  // Slim check-in: weight, waist, water (empty allowed)
+  const st = 0, sl = null;
+  const waterVal = (typeof waterCount === 'number' ? waterCount : 0) || 0;
   const hu=null, no='', proteinPct=null, workoutDone=null, sleepQual=null;
-  // Empty fields allowed — log what you have; skip the rest
-  // (weight/waist/water/sleep can all be blank; still counts as a check-in day)
   const t=selectedDate||today();
+  if(weighInFrequency(CU) === 'weekly'){
+    const prior = hasWeighInThisWeek(CU, t);
+    if(prior.length && ( (wt&&!isNaN(wt)) || (wa&&!isNaN(wa)) )){
+      // Soft notice only — still allow save (correction / second reading)
+      try{ toast('Weekly plan: you already logged '+prior[0].date+'. Saving this entry too.','a'); }catch(e){}
+    }
+  }
   const entry={date:t,weight:(wt&&!isNaN(wt))?wt:null,waist:(wa&&!isNaN(wa))?wa:null,steps:st,sleep:sl,hunger:hu,notes:no,protein:proteinPct,workout:workoutDone,sleepQual:sleepQual,water:waterVal};
   const offline = (typeof navigator!=='undefined' && navigator.onLine===false);
   try{
@@ -4482,58 +4430,43 @@ function renderCoachSelfTracking(){
   if(!host){
     host = document.createElement('div');
     host.id = 'coachSelfTracking';
-    const mount = document.getElementById('adminProgramsMount') || document.getElementById('scr-admin');
-    if(mount) mount.parentNode ? mount.parentNode.insertBefore(host, mount) : null;
     const adminScr = document.getElementById('scr-admin');
-    if(adminScr && !host.parentNode){
+    if(adminScr){
       const first = adminScr.querySelector('.card, #adminProgramsMount, #membersList');
       if(first) first.parentNode.insertBefore(host, first);
       else adminScr.appendChild(host);
     }
   }
-  const mode = CU.trackingMode === 'beginner' ? 'beginner' : 'full';
-  const level = Math.min(4, Math.max(1, parseInt(CU.trackingLevel,10)||1));
+  const freq = weighInFrequency(CU);
   host.innerHTML = `<div class="card" style="margin-bottom:14px;padding:12px 14px;border-color:rgba(255,214,0,.3)">
-    <div style="font-size:11px;font-weight:800;color:var(--grn);letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px">My tracking (coach)</div>
-    <div style="font-size:12px;color:var(--gry);margin-bottom:8px">Same levels as clients — switch yourself anytime.</div>
+    <div style="font-size:11px;font-weight:800;color:var(--grn);letter-spacing:.04em;text-transform:uppercase;margin-bottom:8px">My weigh-in (coach)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <select class="prog-select-sm" id="coachModeSelf">
-        <option value="beginner" ${mode==='beginner'?'selected':''}>Beginner</option>
-        <option value="full" ${mode==='full'?'selected':''}>Full</option>
+      <select class="prog-select-sm" id="coachWeighFreqSelf">
+        <option value="weekly" ${freq==='weekly'?'selected':''}>Weekly</option>
+        <option value="daily" ${freq==='daily'?'selected':''}>Daily</option>
       </select>
-      <select class="prog-select-sm" id="coachLevelSelf">
-        <option value="1" ${level===1?'selected':''}>L1 · Show up</option>
-        <option value="2" ${level===2?'selected':''}>L2 · Water</option>
-        <option value="3" ${level===3?'selected':''}>L3 · Scale (weight/waist)</option>
-        <option value="4" ${level===4?'selected':''}>L4 · Sleep (advanced)</option>
-      </select>
-      <button class="approve-btn" style="padding:6px 12px;font-size:11px" onclick="saveCoachSelfTracking()">Save my level</button>
+      <button class="approve-btn" style="padding:6px 12px;font-size:11px" onclick="saveCoachSelfWeighIn()">Save</button>
     </div>
   </div>`;
 }
-async function saveCoachSelfTracking(){
+async function saveCoachSelfWeighIn(){
   if(!CU||CU.role!=='admin')return;
-  const modeEl = document.getElementById('coachModeSelf');
-  const lvlEl = document.getElementById('coachLevelSelf');
-  let mode = modeEl ? modeEl.value : 'full';
-  let level = lvlEl ? parseInt(lvlEl.value,10) : 4;
-  if(mode==='full') level = 4;
-  if(isNaN(level)||level<1) level=1;
-  if(level>4) level=4;
+  const el = document.getElementById('coachWeighFreqSelf');
+  const freq = el && el.value === 'daily' ? 'daily' : 'weekly';
   const email = String(CU.email||'').toLowerCase();
   try{
-    await fdb.collection('users').doc(email).set({trackingMode:mode, trackingLevel:level},{merge:true});
-    CU.trackingMode = mode;
-    CU.trackingLevel = level;
-    if(CACHE.users[email]){ CACHE.users[email].trackingMode=mode; CACHE.users[email].trackingLevel=level; }
-    toast(mode==='full'?'Your tracking: Full':'Your tracking: Beginner L'+level,'g');
+    await fdb.collection('users').doc(email).set({weighInFrequency:freq},{merge:true});
+    CU.weighInFrequency = freq;
+    if(CACHE.users[email]) CACHE.users[email].weighInFrequency = freq;
+    toast(freq==='daily'?'Your weigh-in: daily':'Your weigh-in: weekly','g');
     try{ applyCheckinTrackingUI(CU); }catch(e){}
     try{ renderCoachSelfTracking(); }catch(e){}
   }catch(e){
     console.error(e);
-    toast('Could not save your tracking level','r');
+    toast('Could not save','r');
   }
 }
+
 
 const renderAdmin = requireAdmin(function renderAdmin(){
   if(!CU||CU.role!=='admin')return;
@@ -4635,7 +4568,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
         if(days===1) return 'opened yesterday';
         return 'opened '+days+'d ago';
       })(u.lastSeenAt) : '';
-      const modeBit = u.trackingMode==='full' ? 'full tracking' : ('L'+((u.trackingLevel||1))+' beginner');
+      const modeBit = weighInFrequency(u)==='daily' ? 'daily weigh-in' : 'weekly weigh-in';
       const tip = isPend ? 'Pending approval' : (ago+' · '+meta.adh+'% adh · '+modeBit+(prog ? ' · '+prog.name : '')+(lastSeenBit ? ' · '+lastSeenBit : ''));
       return `<div class="mrow${open?' open':''}" onclick="toggleAdminMember('${u.email}')">
         <div class="mrow-av" style="background:${col}">${escHtml(u.name).charAt(0).toUpperCase()}</div>
@@ -4661,8 +4594,7 @@ const renderAdmin = requireAdmin(function renderAdmin(){
     if(last) snap += ' · last log '+last.date;
     else snap += ' · no check-ins yet';
     try{
-      const tp = getTrackingProfile(u);
-      snap += tp.mode==='full' ? ' · Full tracking' : (' · Beginner L'+tp.level);
+      snap += weighInFrequency(u)==='daily' ? ' · Daily weigh-in' : ' · Weekly weigh-in';
     }catch(e){}
 
     const guarHint = (typeof suggestGuarantee==='function') ? suggestGuarantee(u) : '';
@@ -4726,21 +4658,15 @@ const renderAdmin = requireAdmin(function renderAdmin(){
             <div style="display:flex;gap:8px"><input class="fi" style="font-size:12px;padding:8px;flex:1" id="tgPhone-${id}" type="tel" value="${escHtml(u.phone||'')}" placeholder="07xx or 2547xx">
             <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientPhone('${u.email}')">Save</button></div></div>
           <div style="margin-bottom:12px;padding:10px;border:1px solid var(--bdr);border-radius:8px">
-            <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">Tracking mode</div>
+            <div style="font-size:11px;color:var(--gry);font-weight:600;margin-bottom:6px">Weigh-in frequency</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-              <select class="prog-select-sm" id="tgMode-${id}" onchange="var lv=document.getElementById('tgLevel-${id}');if(lv)lv.style.opacity=this.value==='full'?'0.4':'1'">
-                <option value="beginner" ${(u.trackingMode||'beginner')==='beginner'?'selected':''}>Beginner (unlock gradually)</option>
-                <option value="full" ${u.trackingMode==='full'?'selected':''}>Full (scale + diet app)</option>
+              <select class="prog-select-sm" id="tgWeighFreq-${id}">
+                <option value="weekly" ${weighInFrequency(u)==='weekly'?'selected':''}>Weekly (beginners)</option>
+                <option value="daily" ${weighInFrequency(u)==='daily'?'selected':''}>Daily</option>
               </select>
-              <select class="prog-select-sm" id="tgLevel-${id}" style="opacity:${u.trackingMode==='full'?'0.4':'1'}">
-                <option value="1" ${Number(u.trackingLevel||1)===1?'selected':''}>L1 · Show up</option>
-                <option value="2" ${Number(u.trackingLevel)===2?'selected':''}>L2 · Water</option>
-                <option value="3" ${Number(u.trackingLevel)===3?'selected':''}>L3 · Scale (weight/waist)</option>
-                <option value="4" ${Number(u.trackingLevel)===4?'selected':''}>L4 · Sleep (advanced)</option>
-              </select>
-              <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientTrackingMode('${u.email}')">Save mode</button>
+              <button class="approve-btn" style="padding:6px 10px;font-size:11px" onclick="saveClientWeighInFreq('${u.email}')">Save</button>
             </div>
-            <div style="font-size:11px;color:var(--gry);line-height:1.4">Beginners start light. Full tracking expects a scale and a diet app (e.g. MyNetDiary).</div>
+            <div style="font-size:11px;color:var(--gry);line-height:1.4">Default is once per week. Use daily only when you need tighter data.</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
             <span style="font-size:11px;color:var(--gry);font-weight:600">Program</span>
@@ -6394,7 +6320,7 @@ function toast(msg,type=''){
 }
 
 // INIT
-onHu(5);renderSpeedo(0);
+renderSpeedo(0);
 const nd=new Date();
 // ciDate element replaced by dpDisplay — handled in initCI()
 try{setupReminders();}catch(e){}
