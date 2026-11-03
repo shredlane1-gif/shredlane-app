@@ -914,21 +914,35 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- TRAIN (program + workouts) -->
   <div class="scr" id="scr-workouts">
     <div class="scr-ttl">TRAIN</div>
-    <div class="scr-sub">Program · or log a lift right now</div>
+    <div class="scr-sub" id="trainModeSub">Your assigned program</div>
     <div id="viewAsBannerWorkouts" style="display:none;background:var(--grn-dim);border:1px solid rgba(255,214,0,.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:700;color:var(--grn)"></div>
     <div id="viewAsBannerProgram" style="display:none"></div>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <button type="button" class="save-btn" style="margin:0;flex:1;padding:14px" onclick="openQuickExerciseLog()">⚡ Log exercise now</button>
+    <!-- Mode: program (default) | on the go -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button type="button" id="trainModeProg" class="approve-btn" style="flex:1;padding:12px 10px;font-size:13px;font-weight:800;background:var(--grn);color:#000;border:none" onclick="setTrainMode('program')">📋 Assigned program</button>
+      <button type="button" id="trainModeGo" class="approve-btn" style="flex:1;padding:12px 10px;font-size:13px;font-weight:800;background:transparent;color:var(--txt);border:1px solid var(--bdr2)" onclick="setTrainMode('ongo')">⚡ On the go</button>
     </div>
+
     <div class="wkt-stats-row" id="wktStatsRow" style="display:none"></div>
 
-    <!-- Assigned program (primary) -->
-    <div id="myProgramWrap"></div>
-    <div class="scr-sub" style="margin-top:14px;margin-bottom:8px;display:none" id="browseProgHdr">Switch program</div>
-    <div id="progBrowseList"></div>
+    <!-- Default: assigned program -->
+    <div id="trainProgramPanel">
+      <div id="myProgramWrap"></div>
+      <div class="scr-sub" style="margin-top:14px;margin-bottom:8px;display:none" id="browseProgHdr">Switch program</div>
+      <div id="progBrowseList"></div>
+    </div>
 
-    <!-- Logger — hidden until they tap a program day or custom log -->
+    <!-- Alternate: exercises not in the program -->
+    <div id="trainOnGoPanel" style="display:none;margin-bottom:12px">
+      <div class="card" style="padding:14px 16px;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:var(--wht);margin-bottom:6px">Track any exercise</div>
+        <div style="font-size:12px;color:var(--gry);line-height:1.45;margin-bottom:12px">Not on your assigned plan? Log it here — name the lift, tick sets as you go, finish when done.</div>
+        <button type="button" class="save-btn" style="margin:0;width:100%" onclick="openQuickExerciseLog()">Start on-the-go log</button>
+      </div>
+    </div>
+
+    <!-- Logger — program day or on-the-go -->
     <div class="card" id="wktLoggerCard" style="display:none;margin-top:12px">
       <div class="card-lbl" id="wktLoggerLbl">Log session</div>
       <div style="font-size:12px;color:var(--gry);margin:-4px 0 12px;line-height:1.45;padding:10px 12px;background:rgba(255,214,0,.06);border:1px solid rgba(255,214,0,.25);border-radius:10px">
@@ -1255,7 +1269,7 @@ function onDataUpdate(){
   if(activeScr.id==='scr-admin') renderAdmin();
   if(activeScr.id==='scr-dashboard') renderDash();
   if(activeScr.id==='scr-history') renderHistory();
-  if(activeScr.id==='scr-workouts'){renderProgramScreen();renderWorkoutsScreen();}
+  if(activeScr.id==='scr-workouts'){try{ if(typeof trainMode==='undefined'||!trainMode) trainMode='program'; setTrainMode(trainMode||'program'); }catch(e){renderProgramScreen();renderWorkoutsScreen();}}
   if(activeScr.id==='scr-photos') renderPhotos();
 }
 
@@ -2413,10 +2427,52 @@ function openWorkoutLogger(opts){
   if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+let trainMode = 'program'; // 'program' | 'ongo'
+
+function setTrainMode(mode){
+  trainMode = (mode === 'ongo') ? 'ongo' : 'program';
+  const progPanel = document.getElementById('trainProgramPanel');
+  const ongoPanel = document.getElementById('trainOnGoPanel');
+  const btnP = document.getElementById('trainModeProg');
+  const btnG = document.getElementById('trainModeGo');
+  const sub = document.getElementById('trainModeSub');
+  if(progPanel) progPanel.style.display = trainMode === 'program' ? '' : 'none';
+  if(ongoPanel) ongoPanel.style.display = trainMode === 'ongo' ? '' : 'none';
+  if(btnP){
+    btnP.style.background = trainMode === 'program' ? 'var(--grn)' : 'transparent';
+    btnP.style.color = trainMode === 'program' ? '#000' : 'var(--txt)';
+    btnP.style.border = trainMode === 'program' ? 'none' : '1px solid var(--bdr2)';
+  }
+  if(btnG){
+    btnG.style.background = trainMode === 'ongo' ? 'var(--grn)' : 'transparent';
+    btnG.style.color = trainMode === 'ongo' ? '#000' : 'var(--txt)';
+    btnG.style.border = trainMode === 'ongo' ? 'none' : '1px solid var(--bdr2)';
+  }
+  if(sub) sub.textContent = trainMode === 'ongo' ? 'Log any exercise · not only the program' : 'Your assigned program';
+  if(trainMode === 'program'){
+    try{ closeWorkoutLogger(); }catch(e){}
+  }
+  try{ renderProgramScreen(); }catch(e){}
+  try{ renderWorkoutsScreen(); }catch(e){}
+}
+
 /** Quick log on the gym floor — one exercise, expand as you go */
 function openQuickExerciseLog(){
   if(!CU){ toast('Sign in first','a'); return; }
   if(VIEWUSER){ toast('Coach view is read-only — clients log their own sets','a'); return; }
+  trainMode = 'ongo';
+  try{
+    const progPanel = document.getElementById('trainProgramPanel');
+    const ongoPanel = document.getElementById('trainOnGoPanel');
+    if(progPanel) progPanel.style.display = 'none';
+    if(ongoPanel) ongoPanel.style.display = '';
+    const btnP = document.getElementById('trainModeProg');
+    const btnG = document.getElementById('trainModeGo');
+    if(btnP){ btnP.style.background='transparent'; btnP.style.color='var(--txt)'; btnP.style.border='1px solid var(--bdr2)'; }
+    if(btnG){ btnG.style.background='var(--grn)'; btnG.style.color='#000'; btnG.style.border='none'; }
+    const sub = document.getElementById('trainModeSub');
+    if(sub) sub.textContent = 'Log any exercise · not only the program';
+  }catch(e){}
   pendingWorkoutPrefill=null;
   wktBuilder={
     id:null,
@@ -2953,7 +3009,7 @@ function renderWorkoutsScreen(){
   const hl=document.getElementById('wktHistList');
   if(!hl)return;
   if(!list.length){
-    hl.innerHTML='<div class="card wkt-empty">No sessions yet.<br><span style="font-size:12px;opacity:.8">Tap <strong>Log exercise now</strong> or open a program day.</span></div>';
+    hl.innerHTML='<div class="card wkt-empty">No sessions yet.<br><span style="font-size:12px;opacity:.8">Open a program day, or switch to <strong>On the go</strong>.</span></div>';
     return;
   }
   hl.innerHTML=renderWorkoutHistoryByWeek(list);
