@@ -605,7 +605,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div class="sec-tag">What you get</div>
     <div class="sec-ttl">BUILT FOR<br>RESULTS</div>
     <div class="feat-grid">
-      <div class="feat"><div class="feat-i">📊</div><div class="feat-t">Daily Check-ins</div><div class="feat-d">Weight, waist, sleep, steps & water every day.</div></div>
+      <div class="feat"><div class="feat-i">📊</div><div class="feat-t">Daily Check-ins</div><div class="feat-d">Weight & waist weekly · water · training logs.</div></div>
       <div class="feat"><div class="feat-i">📈</div><div class="feat-t">16-Week Trends</div><div class="feat-d">Weekly averages and progress vs your baseline.</div></div>
       <div class="feat"><div class="feat-i">⚡</div><div class="feat-t">Live Dashboard</div><div class="feat-d">Streak tracking and step speedometer.</div></div>
       <div class="feat"><div class="feat-i">🏋️</div><div class="feat-t">Training Guidance</div><div class="feat-d">Progressive overload support for your stats.</div></div>
@@ -696,7 +696,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
   <div class="tbar" id="tabBar">
     <button class="tb active" id="tbDashboard" onclick="goTab('dashboard',this)"><span class="tb-i">📊</span><span class="tb-l">Dashboard</span></button>
-    <button class="tb" id="tbCheckin" onclick="goTab('checkin',this)"><span class="tb-i">✏️</span><span class="tb-l">Check-in</span></button>
+    <button class="tb" id="tbCheckin" onclick="goTab('checkin',this)"><span class="tb-i">✏️</span><span class="tb-l">Log</span></button>
     <button class="tb" id="tbHistory" onclick="goTab('history',this)"><span class="tb-i">📅</span><span class="tb-l">History</span></button>
     <button class="tb" id="tbWorkouts" onclick="goTab('workouts',this)"><span class="tb-i">🏋️</span><span class="tb-l">Train</span></button>
     <button class="tb" id="photosTab" onclick="goTab('photos',this)"><span class="tb-i">📸</span><span class="tb-l">Photos</span></button>
@@ -819,7 +819,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
   <!-- CHECK-IN -->
   <div class="scr" id="scr-checkin">
-    <div class="scr-ttl">DAILY CHECK-IN</div>
+    <div class="scr-ttl">LOG</div>
     <div class="scr-sub" id="ciSub">Weight &amp; waist (weekly) · water any day</div>
     <div id="ciModeBanner" style="display:none;margin-bottom:12px;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,214,0,.3);background:rgba(255,214,0,.06);font-size:13px;line-height:1.45;color:var(--txt)"></div>
 
@@ -853,20 +853,11 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
     </div>
 
-    <div class="card" id="ciCardSteps">
-      <div class="card-lbl">Steps</div>
-      <div class="ci-grp"><div class="ci-lbl">Steps <span class="ci-lv" id="ciStL">0</span></div><input class="ci-in" type="number" id="ciSt" placeholder="Optional" inputmode="numeric" oninput="onSt(this.value)"><div style="font-size:10px;color:var(--gry2);margin-top:5px" id="ciStHint">Walk when you can</div></div>
+    <!-- steps/sleep removed — water kept -->
+    <div style="display:none" aria-hidden="true">
+      <input id="ciSt" value=""><span id="ciStL"></span><span id="ciStHint"></span>
+      <input id="sleepR" value="7"><span id="ciSlL"></span>
     </div>
-
-    <div class="card" id="ciCardSleep">
-      <div class="card-lbl">Sleep</div>
-      <div class="ci-grp" style="margin-bottom:0">
-        <div class="ci-lbl">Hours last night <span class="ci-lv" id="ciSlL">7.0 hrs</span></div>
-        <input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'">
-        <div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div>
-      </div>
-    </div>
-
     <div class="card" id="ciCardWater">
       <div class="card-lbl">Water Intake <span class="ci-lv" id="ciWaterL">0 ml</span></div>
       <div class="water-wrap">
@@ -898,7 +889,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       <span id="ciHuL"></span>
     </div>
 
-    <button class="save-btn" id="saveCIBtn" onclick="saveCI()" style="position:relative;z-index:1;margin:8px 0 24px">🔥 Save Check-in</button>
+    <button class="save-btn" id="saveCIBtn" onclick="saveCI()" style="position:relative;z-index:1;margin:8px 0 24px">🔥 Save log</button>
   </div>
 
 <!-- HISTORY -->
@@ -923,11 +914,14 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- TRAIN (program + workouts) -->
   <div class="scr" id="scr-workouts">
     <div class="scr-ttl">TRAIN</div>
-    <div class="scr-sub">Your plan · log sessions</div>
+    <div class="scr-sub">Program · or log a lift right now</div>
     <div id="viewAsBannerWorkouts" style="display:none;background:var(--grn-dim);border:1px solid rgba(255,214,0,.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:700;color:var(--grn)"></div>
     <div id="viewAsBannerProgram" style="display:none"></div>
 
-    <div class="wkt-stats-row" id="wktStatsRow"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <button type="button" class="save-btn" style="margin:0;flex:1;padding:14px" onclick="openQuickExerciseLog()">⚡ Log exercise now</button>
+    </div>
+    <div class="wkt-stats-row" id="wktStatsRow" style="display:none"></div>
 
     <!-- Assigned program (primary) -->
     <div id="myProgramWrap"></div>
@@ -1749,7 +1743,7 @@ function updateDateUI(){
   document.getElementById('dpDisplay').textContent = isToday ? 'Today — '+formatted : formatted;
   document.getElementById('dpPastNote').style.display = isPast ? 'block' : 'none';
   const btn = document.getElementById('saveCIBtn');
-  if(btn) btn.textContent = isPast ? '💾 Save Past Entry' : '🔥 Save Check-in';
+  if(btn) btn.textContent = isPast ? '💾 Save Past Entry' : '🔥 Save log';
 }
 
 
@@ -2419,6 +2413,37 @@ function openWorkoutLogger(opts){
   if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+/** Quick log on the gym floor — one exercise, expand as you go */
+function openQuickExerciseLog(){
+  if(!CU){ toast('Sign in first','a'); return; }
+  if(VIEWUSER){ toast('Coach view is read-only — clients log their own sets','a'); return; }
+  pendingWorkoutPrefill=null;
+  wktBuilder={
+    id:null,
+    date:today(),
+    title:'On the go',
+    programId:null,
+    programDayId:null,
+    exercises:[newExercise()]
+  };
+  showWorkoutLogger(true);
+  initWorkoutForm();
+  const lbl=document.getElementById('wktLoggerLbl');
+  if(lbl) lbl.textContent='On the go · type the exercise, tick each set';
+  const titleEl=document.getElementById('wktTitleIn');
+  if(titleEl) titleEl.value='On the go';
+  const card=document.getElementById('wktLoggerCard');
+  if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
+  // Focus first exercise name
+  setTimeout(function(){
+    try{
+      const inp=document.querySelector('#exList .ex-name-in');
+      if(inp) inp.focus();
+    }catch(e){}
+  }, 200);
+  toast('Name the exercise · log sets · add more if you want','g');
+}
+
 function initWorkoutForm(){
   const titleEl=document.getElementById('wktTitleIn');
   const dateEl=document.getElementById('wktDateIn');
@@ -2915,57 +2940,20 @@ function renderWorkoutsScreen(){
   }
   const list=[...myWorkouts()].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
 
-  // Stats row
+  // Slim Train: hide stats / PRs / charts (history stays below)
   const stEl=document.getElementById('wktStatsRow');
-  if(stEl){
-    const totalSets=list.reduce((s,w)=>s+w.exercises.reduce((s2,ex)=>s2+(ex.sets||[]).length,0),0);
-    const last30=list.filter(w=>{const dd=(new Date()-new Date(w.date+'T00:00:00'))/86400000;return dd<=30;}).length;
-    stEl.innerHTML=`
-      <div class="met" style="padding:12px"><div class="met-lbl">Total Workouts</div><div class="met-val" style="font-size:24px">${list.length}</div></div>
-      <div class="met" style="padding:12px"><div class="met-lbl">Last 30 Days</div><div class="met-val" style="font-size:24px">${last30}</div></div>
-      <div class="met" style="padding:12px"><div class="met-lbl">Total Sets</div><div class="met-val" style="font-size:24px">${totalSets}</div></div>`;
-  }
-
-  // Personal records strip
-  let prWrap=document.getElementById('wktPRWrap');
-  if(!prWrap){
-    prWrap=document.createElement('div');
-    prWrap.id='wktPRWrap';
-    const st=document.getElementById('wktStatsRow');
-    if(st&&st.parentNode) st.parentNode.insertBefore(prWrap, st.nextSibling);
-  }
-  if(prWrap){
-    const prs=allTimePRs(list).slice(0,8);
-    if(prs.length){
-      prWrap.style.display='block';
-      prWrap.innerHTML=`<div class="card" style="margin-bottom:12px;padding:12px 14px">
-        <div class="card-lbl" style="margin-bottom:8px">🏆 Personal records</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${prs.map(p=>`<div style="background:#000;border:1px solid rgba(255,214,0,.4);border-radius:10px;padding:8px 10px;min-width:100px">
-            <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.05em">${escHtml(p.name)}</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;font-style:italic;color:#FFD600">${p.weight}<span style="font-size:12px"> kg</span> × ${p.reps||1}</div>
-            <div style="font-size:10px;color:#666">${escHtml(p.date||'')}</div>
-          </div>`).join('')}
-        </div>
-      </div>`;
-    } else {
-      prWrap.style.display='none';
-      prWrap.innerHTML='';
-    }
-  }
-
-  // Start from assigned program — full plan is already shown above
+  if(stEl){ stEl.style.display='none'; stEl.innerHTML=''; }
+  const prWrap=document.getElementById('wktPRWrap');
+  if(prWrap){ prWrap.style.display='none'; prWrap.innerHTML=''; }
   const fp=document.getElementById('wktFromProgWrap');
   if(fp) fp.innerHTML='';
-
-  // Exercise progression charts + calendar
-  renderExerciseProgression(list);
-  // calendar removed from UI
+  const ep=document.getElementById('exProgWrap');
+  if(ep) ep.innerHTML='';
 
   const hl=document.getElementById('wktHistList');
   if(!hl)return;
   if(!list.length){
-    hl.innerHTML='<div class="card wkt-empty">No sessions logged yet.<br><span style="font-size:12px;opacity:.8">Tap <strong>▶ Log this day</strong> on your program above to start.</span></div>';
+    hl.innerHTML='<div class="card wkt-empty">No sessions yet.<br><span style="font-size:12px;opacity:.8">Tap <strong>Log exercise now</strong> or open a program day.</span></div>';
     return;
   }
   hl.innerHTML=renderWorkoutHistoryByWeek(list);
@@ -4026,25 +4014,11 @@ function renderDash(){
 
   const ci=myCI();
   const wkts=myWorkouts();
-  if(!VIEWUSER){
-    try{ renderTodayJobs(u, ci); }catch(e){}
-    try{ renderMissedDayNudge(u, ci); }catch(e){}
-    try{ renderSundayPhotoNudge(u); }catch(e){}
-    try{ renderRemindPrompt(u); }catch(e){}
-    try{ renderClientAlerts(u, ci); }catch(e){}
-    try{ renderGoalProgress(u, ci); }catch(e){}
-  } else {
-    const sp=document.getElementById('dashSundayPhoto'); if(sp){ sp.style.display='none'; }
-    // Coach view: hide client-only chrome
-    ['dashTodayJobs','dashMissedNudge','dashQuickActions'].forEach(function(id){
-      const el=document.getElementById(id); if(el){ el.style.display='none'; el.innerHTML=''; }
-    });
-    const gp=document.getElementById('goalProgressWrap'); if(gp) gp.style.display='none';
-  }
+  // Slim client home: hide old habit chrome
+  ['dashTodayJobs','dashMissedNudge','dashQuickActions','dashSundayPhoto','onboardWrap','goalProgressWrap'].forEach(function(id){
+    const el=document.getElementById(id); if(el){ el.style.display='none'; if(id!=='goalProgressWrap') try{ el.innerHTML=''; }catch(e){} }
+  });
   try{ renderNextSessionDash(u, wkts); }catch(e){}
-
-  // ── In-app onboarding (replaces daily video links) ──
-  try{ renderOnboarding(u, ci, wkts); }catch(e){ console.error('onboard', e); }
 
   // ── Coach note ──
   const cn=document.getElementById('coachNoteWrap');
