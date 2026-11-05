@@ -737,11 +737,9 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 
     <div id="dashContent">
       <!-- Onboarding checklist (new members) -->
-      <div id="onboardWrap" style="display:none"></div>
       <div id="clientAlertStack" class="alert-stack" style="display:none"></div>
       <div id="remindPromptWrap" style="display:none"></div>
       <div id="todayScorecard" style="display:none"></div>
-      <div id="goalProgressWrap" style="display:none"></div>
 
       <!-- Coach note -->
       <div id="coachNoteWrap" style="display:none"></div>
@@ -820,7 +818,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
   <!-- CHECK-IN -->
   <div class="scr" id="scr-checkin">
     <div class="scr-ttl">LOG</div>
-    <div class="scr-sub" id="ciSub">Weight &amp; waist (weekly) · water any day</div>
+    <div class="scr-sub" id="ciSub">Weight &amp; waist (weekly) · water &amp; sleep</div>
     <div id="ciModeBanner" style="display:none;margin-bottom:12px;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,214,0,.3);background:rgba(255,214,0,.06);font-size:13px;line-height:1.45;color:var(--txt)"></div>
 
     <!-- DATE PICKER -->
@@ -853,10 +851,18 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
       </div>
     </div>
 
-    <!-- steps/sleep removed — water kept -->
+    <!-- steps still hidden -->
     <div style="display:none" aria-hidden="true">
       <input id="ciSt" value=""><span id="ciStL"></span><span id="ciStHint"></span>
-      <input id="sleepR" value="7"><span id="ciSlL"></span>
+    </div>
+    <div class="card" id="ciCardSleep">
+      <div class="card-lbl">Sleep</div>
+      <div class="ci-grp" style="margin-bottom:0">
+        <div class="ci-lbl">Hours last night <span class="ci-lv" id="ciSlL">— hrs</span></div>
+        <input type="range" id="sleepR" min="2" max="12" step="0.5" value="7" oninput="document.getElementById('ciSlL').textContent=this.value+' hrs'">
+        <div class="rng-mks"><span class="rmk">2 hrs</span><span class="rmk">7 hrs</span><span class="rmk">12 hrs</span></div>
+        <div style="font-size:11px;color:var(--gry);margin-top:6px">Optional — leave as is or slide to log</div>
+      </div>
     </div>
     <div class="card" id="ciCardWater">
       <div class="card-lbl">Water Intake <span class="ci-lv" id="ciWaterL">0 ml</span></div>
@@ -895,7 +901,7 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 <!-- HISTORY -->
   <div class="scr" id="scr-history">
     <div class="scr-ttl">HISTORY</div>
-    <div class="scr-sub" id="histSub">All check-ins</div>
+    <div class="scr-sub" id="histSub">Body logs &amp; training</div>
     <div class="tl-banner" id="tlBanner" style="display:none">
       <div class="tl-main" id="tlMain"></div>
       <div class="tl-sub" id="tlSub"></div>
@@ -903,11 +909,16 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       <button class="b-secondary" style="width:auto;padding:10px 16px;border-color:var(--grn);color:var(--grn)" onclick="shareBodyChartImage()">📈 Share weight &amp; waist chart</button>
     </div>
-    <div class="card" style="padding:0;overflow:hidden">
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
+      <div class="card-lbl" style="padding:12px 14px 0">Body log</div>
       <div style="overflow-x:auto">
-        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Steps</th><th>Water</th><th>Sleep</th></tr></thead>
-        <tbody id="histBody"><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr></tbody></table>
+        <table class="htbl"><thead><tr><th>Date</th><th>Wt</th><th>Wst</th><th>Water</th><th>Sleep</th></tr></thead>
+        <tbody id="histBody"><tr><td colspan="5" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No body logs yet</td></tr></tbody></table>
       </div>
+    </div>
+    <div class="card" style="padding:14px">
+      <div class="card-lbl">Training sessions</div>
+      <div id="histWktList" style="font-size:13px;color:var(--gry)">No sessions yet</div>
     </div>
   </div>
 
@@ -1325,7 +1336,10 @@ function startDataListeners(){
       const checkins={};
       snap.forEach(doc=>{
         const data=doc.data();
-        checkins[doc.id]=(data&&Array.isArray(data.entries))?data.entries.filter(e=>e&&e.date):[];
+        const key=String(doc.id||'').toLowerCase().trim();
+        const arr=(data&&Array.isArray(data.entries))?data.entries.filter(e=>e&&e.date):[];
+        checkins[key]=arr;
+        if(doc.id!==key) checkins[doc.id]=arr;
       });
       CACHE.checkins=checkins;
       checkinsReady=true;
@@ -1336,7 +1350,10 @@ function startDataListeners(){
       const workouts={};
       snap.forEach(doc=>{
         const data=doc.data();
-        workouts[doc.id]=(data&&Array.isArray(data.entries))?data.entries.filter(e=>e&&e.date&&e.id):[];
+        const key=String(doc.id||'').toLowerCase().trim();
+        const arr=(data&&Array.isArray(data.entries))?data.entries.filter(e=>e&&e.date&&e.id):[];
+        workouts[key]=arr;
+        if(doc.id!==key) workouts[doc.id]=arr;
       });
       CACHE.workouts=workouts;
       workoutsReady=true;
@@ -1354,13 +1371,14 @@ function startDataListeners(){
     },err=>console.error('photos listener',err)));
 
   } else {
-    // ── MEMBER: only own documents ──
-    const email = CU.email;
+    // ── MEMBER: only own documents (always lowercase email keys) ──
+    const email = String(CU.email||'').toLowerCase().trim();
 
-    // Own user profile (so approval status / program assignment stay live)
     unsubscribers.push(fdb.collection('users').doc(email).onSnapshot(snap=>{
       if(snap.exists){
-        CACHE.users[email]=snap.data();
+        const data = snap.data()||{};
+        data.email = String(data.email||email).toLowerCase().trim();
+        CACHE.users[email]=data;
         fbReady=true;
         onDataUpdate();
       }
@@ -1487,6 +1505,7 @@ function onSuccess(user, opts){
       if(CACHE.users[em]) CACHE.users[em].status = 'approved';
     }catch(e){}
   }
+  if(user && user.email) user.email = String(user.email).toLowerCase().trim();
   CU=user;
   cacheProfileLocal(user);
   try{ touchLastSeen(user.email||user.id); }catch(e){}
@@ -1588,15 +1607,6 @@ function activateTabButton(id){
   if(b)b.classList.add('active');
 }
 
-function goToWorkoutsFromCI(){
-  const wktBtn=document.getElementById('tbWorkouts');
-  pendingWorkoutPrefill={
-    date:(typeof selectedDate!=='undefined' && selectedDate)?selectedDate:today(),
-    title:'',
-    exercises:[newExercise()]
-  };
-  goTab('workouts',wktBtn);
-}
 
 function viewMember(email){viewMemberAs(email,'dashboard');}
 
@@ -1639,7 +1649,24 @@ function exitViewAs(){
 // CHECK-IN
 // ═══════════════════════════════════════
 let VIEWUSER=null; // coach "view as" target user object
-function myCI(){const u=VIEWUSER||CU;if(!u)return[];const v=gDB().checkins[u.email];return Array.isArray(v)?v:[]}
+function userEmailKey(u){
+  u = u || CU;
+  if(!u) return '';
+  return String(u.email||u.id||'').toLowerCase().trim();
+}
+/** Resolve array from CACHE map whether key is email, mixed case, or doc id */
+function lookupUserData(map, u){
+  if(!map||!u) return [];
+  const em = userEmailKey(u);
+  if(em && Array.isArray(map[em])) return map[em];
+  if(u.email && Array.isArray(map[u.email])) return map[u.email];
+  // scan keys (handles doc-id vs email mismatch)
+  for(const k of Object.keys(map)){
+    if(String(k).toLowerCase().trim()===em && Array.isArray(map[k])) return map[k];
+  }
+  return [];
+}
+function myCI(){const u=VIEWUSER||CU;if(!u)return[];return lookupUserData(gDB().checkins, u);}
 
 // ── DATE PICKER STATE ──
 let selectedDate = today(); // YYYY-MM-DD
@@ -1737,7 +1764,7 @@ function pickDate(ds){
     document.getElementById('hungR').value=5;
     document.getElementById('ciNotes').value='';
     proteinPct=null;workoutDone=null;sleepQual=null;
-    setProtein(null);setWorkout(null);setSleepQual(null);
+    proteinPct=null;workoutDone=null;sleepQual=null;
     waterCount=0;renderWater();
     renderSpeedo(0);
   }
@@ -1827,24 +1854,24 @@ function applyCheckinTrackingUI(u){
   const water = document.getElementById('ciCardWater');
   if(body) body.style.display = '';
   if(water) water.style.display = '';
+  if(sleep) sleep.style.display = '';
   if(steps) steps.style.display = 'none';
-  if(sleep) sleep.style.display = 'none';
   if(sub){
     sub.textContent = freq === 'daily'
-      ? 'Weight, waist & water · daily when needed'
-      : 'Weight & waist once a week · water any day';
+      ? 'Weight, waist, water & sleep'
+      : 'Weight & waist weekly · water & sleep any day';
   }
   if(banner){
     banner.style.display = 'block';
     if(freq === 'weekly'){
       const existing = hasWeighInThisWeek(u, null);
       if(existing.length){
-        banner.innerHTML = '<strong style="color:var(--grn)">Weekly weigh-in</strong> — Body metrics already logged this week ('+existing[0].date+'). You can still log <em>water</em> any day.';
+        banner.innerHTML = '<strong style="color:var(--grn)">Weekly weigh-in</strong> — Body metrics already logged this week ('+existing[0].date+'). You can still log <em>water</em> and <em>sleep</em> any day.';
       } else {
-        banner.innerHTML = '<strong style="color:var(--grn)">Simple log</strong> — Weight & waist once this week. Water whenever you want. Empty fields are OK.';
+        banner.innerHTML = '<strong style="color:var(--grn)">Simple log</strong> — Weight & waist once this week. Water and sleep whenever you want. Empty fields are OK.';
       }
     } else {
-      banner.innerHTML = '<strong style="color:var(--grn)">Daily log</strong> — Weight, waist & water when you can. Empty fields are allowed.';
+      banner.innerHTML = '<strong style="color:var(--grn)">Daily log</strong> — Weight, waist, water & sleep when you can. Empty fields are allowed.';
     }
   }
 }
@@ -1887,18 +1914,14 @@ function initCI(){
   document.getElementById('hungR').value=5;
   document.getElementById('ciNotes').value='';
   proteinPct=null;workoutDone=null;sleepQual=null;
-  setProtein(null);setWorkout(null);setSleepQual(null);
+  proteinPct=null;workoutDone=null;sleepQual=null;
   waterCount=0;renderWater();
   renderSpeedo(0);
   try{ setCheckinCoachLock(); }catch(e){}
 }
 
 
-// Legacy stubs (UI removed)
 let proteinPct=null, workoutDone=null, sleepQual=null;
-function setProtein(val){ proteinPct=val; }
-function setWorkout(val){ workoutDone=val; }
-function setSleepQual(val){ sleepQual=val; }
 
 let waterCount = 0; // millilitres
 
@@ -1941,7 +1964,6 @@ function adjustWater(d){
   waterCount = Math.max(0, Math.min(10000, (Number(waterCount)||0) + Number(d)));
   renderWater();
 }
-function setWater(n){ setWaterMl(n); }
 function setWaterMl(n, soft){
   let v = parseInt(n, 10);
   if(isNaN(v)) v = 0;
@@ -2080,67 +2102,8 @@ function setWaistUnit(unit){
   if(lbl) lbl.textContent = (inp&&inp.value) ? inp.value+' in' : '— in';
 }
 
-function renderClientAlerts(u, ci){
-  // Manual in-app nudges removed — weekly coach message covers feedback.
-  const stack = document.getElementById('clientAlertStack');
-  if(stack){ stack.style.display='none'; stack.innerHTML=''; }
-}
 
 
-function renderRemindPrompt(u){
-  const wrap = document.getElementById('remindPromptWrap');
-  if(!wrap){ try{ ensureDailyReminders(u); }catch(e){} return; }
-  if(!u || VIEWUSER || u.role==='admin' || (u.status && u.status!=='approved')){
-    wrap.style.display='none'; wrap.innerHTML='';
-    return;
-  }
-  if(!('Notification' in window)){
-    wrap.style.display='block';
-    wrap.innerHTML = `<div class="alert-card warn">
-      <strong>🔔 Notifications not supported</strong><br>
-      This browser cannot show daily reminders. Use Chrome or Safari and add Shredlane to your home screen.
-    </div>`;
-    return;
-  }
-  const perm = Notification.permission;
-  if(perm==='granted'){
-    wrap.style.display='none'; wrap.innerHTML='';
-    try{ ensureDailyReminders(u); }catch(e){}
-    return;
-  }
-  // Keep showing until they allow notifications
-  wrap.style.display='block';
-  if(perm==='denied'){
-    wrap.innerHTML = `<div class="alert-card warn">
-      <strong>🔔 Turn on notifications</strong><br>
-      Reminders are blocked in your browser settings. Open site settings for Shredlane and allow notifications, then reload.
-      <div class="alert-actions">
-        <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders()">I allowed them — check again</button>
-      </div>
-    </div>`;
-  } else {
-    wrap.innerHTML = `<div class="alert-card info">
-      <strong>🔔 Turn on daily reminders</strong><br>
-      Get a morning and evening prompt to log. This stays here until notifications are on.
-      <div style="font-size:12px;color:var(--gry);margin-top:6px">6:30am weight &amp; waist · 9:00pm water</div>
-      <div class="alert-actions">
-        <button class="b-secondary" style="width:auto;padding:8px 12px;font-size:12px;border-color:var(--grn);color:var(--grn)" onclick="enableReminders()">Enable notifications</button>
-      </div>
-    </div>`;
-  }
-}
-async function dismissRemindPrompt(enabled){
-  try{ localStorage.setItem('sl_remind_prompt_dismiss','1'); }catch(e){}
-  if(CU && CU.nudgeReminders){
-    try{
-      await fdb.collection('users').doc(CU.email).set({nudgeReminders:false},{merge:true});
-      CU.nudgeReminders=false;
-      if(CACHE.users[CU.email]) CACHE.users[CU.email].nudgeReminders=false;
-    }catch(e){}
-  }
-  if(enabled) toast('Reminders scheduled for 6:30am & 9:00pm','g');
-  renderDash();
-}
 
 
 /** Last 7 days (including today): counts for coach weekly sheet + client summary */
@@ -2228,91 +2191,7 @@ function renderWeekCountsCard(hostId, u, ci, wkts, opts){
   return c;
 }
 
-function renderTodayScorecard(u, ci){
-  const wrap = document.getElementById('todayScorecard');
-  if(!wrap || !u){ if(wrap) wrap.style.display='none'; return; }
-  const g = userGoals(u);
-  const t = today();
-  const todayEntry = (ci||[]).find(c=>c && c.date===t) || null;
-  const wtOk = !!(todayEntry && todayEntry.weight!=null && todayEntry.weight!=='');
-  const waOk = !!(todayEntry && todayEntry.waist!=null && todayEntry.waist!=='');
-  const water = todayEntry ? waterToMl(todayEntry.water||0) : 0;
-  const steps = todayEntry ? (todayEntry.steps||0) : 0;
-  const sleep = todayEntry && todayEntry.sleep!=null ? Number(todayEntry.sleep) : null;
-  const wPct = Math.min(100, Math.round((water / g.waterMl) * 100));
-  const sPct = Math.min(100, Math.round((steps / g.steps) * 100));
-  const slPct = sleep==null ? 0 : Math.min(100, Math.round((sleep / g.sleep) * 100));
-  const waterCls = wPct>=100 ? 'ok' : (water>0 ? 'mid' : 'miss');
-  const stepsCls = sPct>=100 ? 'ok' : (steps>0 ? 'mid' : 'miss');
-  const sleepCls = sleep==null ? 'miss' : (slPct>=100 ? 'ok' : 'mid');
-  const done = [wtOk, waOk, wPct>=100, sPct>=100, sleep!=null].filter(Boolean).length;
-  wrap.style.display='block';
-  wrap.innerHTML = `<div class="score-card-wrap">
-    <div class="score-hd">
-      <div class="score-hd-title">Today's scorecard</div>
-      <div class="score-hd-sub">${done}/5 done</div>
-    </div>
-    <div class="score-strip">
-      <div class="score-cell ${wtOk?'ok':'miss'}"><div class="sc-k">Weight</div><div class="sc-v">${wtOk?'✓':'—'}</div><div class="sc-foot">${wtOk?'logged':'log am'}</div></div>
-      <div class="score-cell ${waOk?'ok':'miss'}"><div class="sc-k">Waist</div><div class="sc-v">${waOk?'✓':'—'}</div><div class="sc-foot">${waOk?'logged':'log am'}</div></div>
-      <div class="score-cell ${waterCls}"><div class="sc-k">Water</div><div class="sc-v">${wPct}%</div><div class="sc-foot">${formatWaterShort(water)}</div></div>
-      <div class="score-cell ${stepsCls}"><div class="sc-k">Steps</div><div class="sc-v">${sPct}%</div><div class="sc-foot">${Number(steps).toLocaleString()}</div></div>
-      <div class="score-cell ${sleepCls}"><div class="sc-k">Sleep</div><div class="sc-v">${sleep==null?'—':sleep+'h'}</div><div class="sc-foot">${sleep==null?'log':'target '+g.sleep+'h'}</div></div>
-    </div>
-  </div>`;
-}
 
-function renderGoalProgress(u, ci){
-  const wrap = document.getElementById('goalProgressWrap');
-  if(!wrap || !u){ if(wrap) wrap.style.display='none'; return; }
-  const g = userGoals(u);
-  const last = ci.length ? ci.reduce((a,b)=>a.date>b.date?a:b) : null;
-  const water = last ? waterToMl(last.water||0) : 0;
-  const steps = last ? (last.steps||0) : 0;
-  const sleep = last ? (last.sleep||0) : 0;
-  const adh = adherencePct(u, 14);
-  const wPct = Math.min(100, Math.round((water/g.waterMl)*100));
-  const sPct = Math.min(100, Math.round((steps/g.steps)*100));
-  const slPct = Math.min(100, Math.round((sleep/g.sleep)*100));
-  const waterCls = wPct>=100 ? 'ok' : (water>0 ? 'mid' : 'miss');
-  const stepsCls = sPct>=100 ? 'ok' : (steps>0 ? 'mid' : 'miss');
-  const sleepCls = slPct>=100 ? 'ok' : (sleep>0 ? 'mid' : 'miss');
-  const adhCls = adh>=70 ? 'ok' : (adh>=40 ? 'mid' : 'miss');
-  const hit = [wPct>=100, sPct>=100, slPct>=100, adh>=70].filter(Boolean).length;
-  wrap.style.display='block';
-  wrap.innerHTML = `<div class="goals-card-wrap">
-    <div class="goals-hd">
-      <div class="goals-hd-title">Coach targets</div>
-      <div class="goals-hd-sub">Latest log · set by coach</div>
-    </div>
-    <div class="goal-strip">
-      <div class="goal-cell ${waterCls}">
-        <div class="gc-k">Water</div>
-        <div class="gc-v">${formatWater(water)}</div>
-        <div class="gc-t">Target ${formatWater(g.waterMl)}</div>
-        <div class="gc-bar"><i style="width:${wPct}%"></i></div>
-      </div>
-      <div class="goal-cell ${stepsCls}">
-        <div class="gc-k">Steps</div>
-        <div class="gc-v">${Number(steps).toLocaleString()}</div>
-        <div class="gc-t">Target ${Number(g.steps).toLocaleString()}</div>
-        <div class="gc-bar"><i style="width:${sPct}%"></i></div>
-      </div>
-      <div class="goal-cell ${sleepCls}">
-        <div class="gc-k">Sleep</div>
-        <div class="gc-v">${sleep||'—'}h</div>
-        <div class="gc-t">Target ${g.sleep}h</div>
-        <div class="gc-bar"><i style="width:${slPct}%"></i></div>
-      </div>
-      <div class="goal-cell ${adhCls}">
-        <div class="gc-k">Adherence</div>
-        <div class="gc-v">${adh}%</div>
-        <div class="gc-t">Check-ins / 14 days</div>
-        <div class="gc-bar"><i style="width:${adh}%"></i></div>
-      </div>
-    </div>
-  </div>`;
-}
 
 function renderAdminRiskAndBulk(){
   // Daily coach lists removed — feedback is weekly via message + MyNetDiary day-to-day.
@@ -2331,8 +2210,14 @@ async function saveCI(){
   const waRaw = document.getElementById('ciWa') ? document.getElementById('ciWa').value : '';
   const wt = parseDec(wtRaw);
   const wa = waistToStorage(waRaw, 'in');
-  // Slim check-in: weight, waist, water (empty allowed)
-  const st = 0, sl = null;
+  // Slim check-in: weight, waist, water, sleep (empty allowed)
+  const st = 0;
+  const sleepEl = document.getElementById('sleepR');
+  let sl = null;
+  if(sleepEl && sleepEl.value !== '' && sleepEl.value != null){
+    const sv = parseFloat(sleepEl.value);
+    if(!isNaN(sv)) sl = sv;
+  }
   const waterVal = (typeof waterCount === 'number' ? waterCount : 0) || 0;
   const hu=null, no='', proteinPct=null, workoutDone=null, sleepQual=null;
   const t=selectedDate||today();
@@ -2346,11 +2231,12 @@ async function saveCI(){
   const entry={date:t,weight:(wt&&!isNaN(wt))?wt:null,waist:(wa&&!isNaN(wa))?wa:null,steps:st,sleep:sl,hunger:hu,notes:no,protein:proteinPct,workout:workoutDone,sleepQual:sleepQual,water:waterVal};
   const offline = (typeof navigator!=='undefined' && navigator.onLine===false);
   try{
-    const ref=fdb.collection('checkins').doc(CU.email);
+    const ref=fdb.collection('checkins').doc(String(CU.email||'').toLowerCase().trim());
     // Build list from cache first (works offline); refresh from server when online
     let list=[];
-    if(CACHE.checkins && Array.isArray(CACHE.checkins[CU.email])){
-      list=CACHE.checkins[CU.email].filter(e=>e&&e.date).map(e=>({...e}));
+    const _ciKey=String(CU.email||'').toLowerCase().trim();
+    if(CACHE.checkins && Array.isArray(CACHE.checkins[_ciKey])){
+      list=CACHE.checkins[_ciKey].filter(e=>e&&e.date).map(e=>({...e}));
     }
     if(!offline){
       try{
@@ -2366,7 +2252,7 @@ async function saveCI(){
     // IMPORTANT: plain set (not transaction) — transactions require internet
     await ref.set({entries:list});
     if(!CACHE.checkins)CACHE.checkins={};
-    CACHE.checkins[CU.email]=list;
+    CACHE.checkins[_ciKey]=list;
     let nextAct = 'You are done for today.';
     try{
       const nxt = nextProgramSession(CU, typeof myWorkouts==='function'?myWorkouts():[]);
@@ -2391,7 +2277,7 @@ async function saveCI(){
 // ═══════════════════════════════════════
 // WORKOUT TRACKER
 // ═══════════════════════════════════════
-function myWorkouts(){const u=VIEWUSER||CU;if(!u)return[];const v=gDB().workouts[u.email];return Array.isArray(v)?v:[]}
+function myWorkouts(){const u=VIEWUSER||CU;if(!u)return[];return lookupUserData(gDB().workouts, u);}
 
 let wktBuilder={id:null,date:today(),title:'',exercises:[]};
 let pendingWorkoutPrefill=null;
@@ -3490,11 +3376,7 @@ function renderProgramScreen(){
     }
   }
 }
-
-function closeDemoVideo(){
-  const ov=document.getElementById('demoOverlay');
-  if(ov){const vid=document.getElementById('demoOverlayVideo');if(vid){vid.pause();vid.src='';}ov.style.display='none';}
-}  
+  
 
 // ── Admin: program builder ──
 let progBuilder={id:null,name:'',description:'',days:[],_open:false};
@@ -3796,54 +3678,7 @@ function renderTrend(){
 // ═══════════════════════════════════════
 
 
-function renderSundayPhotoNudge(u){
-  let el = document.getElementById('dashSundayPhoto');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'dashSundayPhoto';
-    const cont = document.getElementById('dashContent');
-    if(cont) cont.insertBefore(el, cont.firstChild);
-  }
-  if(!u || VIEWUSER || u.status!=='approved'){ el.style.display='none'; return; }
-  const day = new Date().getDay(); // 0 = Sunday
-  if(day !== 0){ el.style.display='none'; el.innerHTML=''; return; }
-  // Photo in last 7 days?
-  const raw = (CACHE.photos && CACHE.photos[u.email]) || [];
-  const list = Array.isArray(raw) ? raw : [];
-  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
-  const weekStr = weekAgo.toISOString().slice(0,10);
-  const hasRecent = list.some(e=>e && e.date >= weekStr);
-  if(hasRecent){ el.style.display='none'; el.innerHTML=''; return; }
-  el.style.display='block';
-  el.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.35)">
-    <div style="font-size:13px;font-weight:700;color:var(--wht)">Sunday photo day</div>
-    <div style="font-size:12px;color:var(--gry);margin-top:4px">No progress photo this week yet. A quick front / side / back helps your coach track change.</div>
-    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('photos',document.getElementById('photosTab'))">Open Photos</button>
-  </div>`;
-}
-function renderMissedDayNudge(u, ci){
-  let el=document.getElementById('dashMissedNudge');
-  if(!el){
-    el=document.createElement('div');
-    el.id='dashMissedNudge';
-    const jobs=document.getElementById('dashTodayJobs');
-    if(jobs&&jobs.parentNode) jobs.parentNode.insertBefore(el, jobs.nextSibling);
-    else {
-      const cont=document.getElementById('dashContent');
-      if(cont) cont.insertBefore(el, cont.firstChild);
-    }
-  }
-  if(!u||VIEWUSER||u.status!=='approved'){ el.style.display='none'; return; }
-  const last=lastCheckinDate(ci);
-  const gap=daysSinceDate(last);
-  if(!last || gap<2){ el.style.display='none'; el.innerHTML=''; return; }
-  el.style.display='block';
-  el.innerHTML=`<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,184,0,.35)">
-    <div style="font-size:13px;font-weight:700;color:var(--wht)">Log today — one day is enough to restart.</div>
-    <div style="font-size:11px;color:var(--gry);margin-top:4px">${gap} days since your last check-in. No lecture — just open Check-in.</div>
-    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>
-  </div>`;
-}
+
 function renderNextSessionDash(u, wkts){
   let el=document.getElementById('dashNextSession');
   if(!el){
@@ -3865,59 +3700,7 @@ function renderNextSessionDash(u, wkts){
     ${!VIEWUSER?`<button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px;border-color:var(--grn);color:var(--grn)" onclick="goTab('workouts',document.getElementById('tbWorkouts'))">Open Train</button>`:''}
   </div>`;
 }
-function renderTodayJobs(u, ci){
-  let el = document.getElementById('dashTodayJobs');
-  if(!el){
-    el = document.createElement('div');
-    el.id = 'dashTodayJobs';
-    const greet = document.getElementById('dashGreet');
-    if(greet && greet.parentNode) greet.parentNode.insertBefore(el, greet.nextSibling);
-    else {
-      const cont = document.getElementById('dashContent');
-      if(cont) cont.insertBefore(el, cont.firstChild);
-    }
-  }
-  if(!u || VIEWUSER){ el.style.display='none'; el.innerHTML=''; return; }
-  if(u.status && u.status!=='approved'){ el.style.display='none'; return; }
-  const t = today();
-  const row = (ci||[]).find(c=>c && c.date===t);
-  const h = new Date().getHours();
-  const bits = [];
-  const needWt = !row || row.weight==null || row.weight==='';
-  const needWa = !row || row.waist==null || row.waist==='';
-  const needSt = !row || !(row.steps>0);
-  const needW = !row || !(typeof waterToMl==='function' ? waterToMl(row.water||0)>0 : row.water);
-  const needSl = !row || row.sleep==null || row.sleep==='';
-  if(h < 12){
-    if(needWt || needWa) bits.push('Morning: log weight & waist');
-    else bits.push('Morning log done');
-  } else if(h < 18){
-    if(needWt || needWa) bits.push('Still need weight & waist');
-    if(needSt || needW) bits.push('Later: steps & water');
-    if(!bits.length) bits.push('On track so far today');
-  } else {
-    const miss = [];
-    if(needWt || needWa) miss.push('weight/waist');
-    if(needSt) miss.push('steps');
-    if(needW) miss.push('water');
-    if(needSl) miss.push('sleep');
-    if(miss.length) bits.push('Tonight: log '+miss.join(', '));
-    else bits.push('Today fully logged');
-  }
-  const allDone = !(needWt||needWa||needSt||needW||needSl);
-  // Quiet mode: fully logged → hide the jobs card (win line still shows)
-  if(allDone){
-    el.style.display = 'none';
-    el.innerHTML = '';
-    return;
-  }
-  el.style.display = 'block';
-  el.innerHTML = `<div class="card" style="padding:12px 14px;margin-bottom:12px;border-color:rgba(255,214,0,.3)">
-    <div style="font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Today</div>
-    <div style="font-size:14px;font-weight:700;color:var(--wht)">${escHtml(bits.join(' · '))}</div>
-    <button class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px;margin-top:8px" onclick="goTab('checkin',document.getElementById('tbCheckin'))">Open check-in</button>
-  </div>`;
-}
+
 
 
 // ═══════════════════════════════════════
@@ -3968,84 +3751,13 @@ const ONBOARD_DAYS = [
   }
 ];
 
-function onboardDayIndex(u){
-  // Day 1 = join date (or approved day). Clamp 0..6 for 7-day plan
-  let start = u.joined || null;
-  if(u.approvedAt){
-    try{ start = new Date(u.approvedAt).toISOString().slice(0,10); }catch(e){}
-  }
-  if(!start) start = today();
-  let days = 0;
-  try{
-    const a = new Date(start+'T12:00:00');
-    const b = new Date(today()+'T12:00:00');
-    days = Math.floor((b - a) / 86400000);
-  }catch(e){ days = 0; }
-  if(days < 0) days = 0;
-  return Math.min(days, ONBOARD_DAYS.length - 1);
-}
 
 function onboardDismissedKey(email){
   return 'sl_onboard_dismiss_'+String(email||'').toLowerCase();
 }
-function isOnboardFullyDismissed(email){
-  try{ return localStorage.getItem(onboardDismissedKey(email)) === '1'; }catch(e){ return false; }
-}
-function dismissOnboarding(){
-  if(!CU) return;
-  try{ localStorage.setItem(onboardDismissedKey(CU.email), '1'); }catch(e){}
-  try{ fdb.collection('users').doc(CU.email).set({onboardDismissed:true},{merge:true}); }catch(e){}
-  toast('Onboarding hidden — you can still use every tab','g');
-  try{ renderDash(); }catch(e){}
-}
 
-function renderOnboarding(u, ci, wkts){
-  const ob = document.getElementById('onboardWrap');
-  if(!ob) return;
-  if(!u || VIEWUSER || u.status !== 'approved'){ ob.style.display='none'; return; }
-  if(u.onboardDismissed || isOnboardFullyDismissed(u.email)){ ob.style.display='none'; return; }
 
-  // Show for first 14 days after join/approve, or until basics done + day plan finished
-  let start = u.joined || today();
-  if(u.approvedAt){
-    try{ start = new Date(u.approvedAt).toISOString().slice(0,10); }catch(e){}
-  }
-  let daysSince = 0;
-  try{
-    daysSince = Math.floor((new Date(today()+'T12:00:00') - new Date(start+'T12:00:00')) / 86400000);
-  }catch(e){}
-  if(daysSince > 14){ ob.style.display='none'; return; }
 
-  const dayIdx = onboardDayIndex(u);
-  const day = ONBOARD_DAYS[dayIdx];
-  const hasCI = (ci||[]).length > 0;
-  const hasProg = !!u.programId;
-  const hasWkt = (wkts||[]).length > 0;
-  const dayNum = dayIdx + 1;
-
-  const stepsHtml = (day.steps||[]).map(s=>`<div class="ob-item">→ ${escHtml(s)}</div>`).join('');
-  const actionBtn = day.action
-    ? `<button class="approve-btn" style="margin-top:10px;padding:10px 14px;background:var(--grn);color:#000;border:none;font-weight:800" onclick="goTab('${day.action.tab}',document.getElementById('${day.action.tab==='checkin'?'tbCheckin':(day.action.tab==='workouts'?'tbWorkouts':(day.action.tab==='photos'?'photosTab':'tbDashboard'))}'))">${escHtml(day.action.label)}</button>`
-    : '';
-
-  ob.style.display = 'block';
-  ob.innerHTML = `<div class="onboard-card">
-    <div class="ob-day">Day ${dayNum} of ${ONBOARD_DAYS.length} · in-app guide</div>
-    <div class="ob-day-title">${escHtml(day.title)}</div>
-    <div class="ob-day-body">${escHtml(day.body)}</div>
-    <div class="ob-steps">${stepsHtml}</div>
-    <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)">
-      <div style="font-size:11px;font-weight:700;color:var(--gry);margin-bottom:4px">Basics</div>
-      <div class="ob-item ${hasCI?'ob-done':''}">${hasCI?'✅':'○'} First check-in</div>
-      <div class="ob-item ${hasProg?'ob-done':''}">${hasProg?'✅':'○'} Program assigned</div>
-      <div class="ob-item ${hasWkt?'ob-done':''}">${hasWkt?'✅':'○'} First workout logged</div>
-    </div>
-    ${actionBtn}
-    <div style="margin-top:10px">
-      <button type="button" class="b-secondary" style="width:auto;padding:6px 12px;font-size:11px" onclick="dismissOnboarding()">I know the system — hide this</button>
-    </div>
-  </div>`;
-}
 
 
 function renderDash(){
@@ -4329,73 +4041,56 @@ function renderHistory(){
   }catch(e){ console.error('hist week', e); }
 
   const tb=document.getElementById('histBody');
-  if(!recent.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No check-ins yet</td></tr>';return;}
-  tb.innerHTML=recent.map(c=>{
-    const wMl=(c.water!=null&&c.water!=='')?waterToMl(c.water):null;
-    const wTxt=wMl!=null&&wMl>0?formatWaterShort(wMl):'—';
-    return `<tr>
-      <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
-      <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
-      <td class="${(c.steps||0)>=10000?'sh':'sm'}">${c.steps?(c.steps/1000).toFixed(1)+'K':'—'}</td>
-      <td style="color:var(--grn);font-size:11px;font-weight:700;white-space:nowrap">${wTxt}</td>
-      <td>${c.sleep!=null?c.sleep+'h':'—'}</td>
-    </tr>`;
-  }).join('');
+  if(tb){
+    if(!recent.length){
+      tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--gry);font-family:Barlow,sans-serif">No body logs yet — use <strong>Log</strong> for weight, waist, water, sleep</td></tr>';
+    } else {
+      tb.innerHTML=recent.map(c=>{
+        const wMl=(c.water!=null&&c.water!=='')?waterToMl(c.water):null;
+        const wTxt=wMl!=null&&wMl>0?formatWaterShort(wMl):'—';
+        return `<tr>
+          <td style="font-family:Barlow,sans-serif;color:var(--gry)">${new Date(c.date+'T00:00:00').toLocaleDateString('en-KE',{day:'2-digit',month:'short'})}</td>
+          <td>${c.weight??'—'}</td><td>${c.waist??'—'}</td>
+          <td style="color:var(--grn);font-size:11px;font-weight:700;white-space:nowrap">${wTxt}</td>
+          <td>${c.sleep!=null&&c.sleep!==''?c.sleep+'h':'—'}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  // Training sessions (same data as Train history)
+  const wktHost=document.getElementById('histWktList');
+  if(wktHost){
+    const wkts=[...myWorkouts()].sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)));
+    if(!wkts.length){
+      wktHost.innerHTML='<div style="padding:8px 0">No sessions yet — use <strong>Train</strong> (program or On the go)</div>';
+    } else {
+      wktHost.innerHTML=wkts.slice(0,30).map(w=>{
+        const nEx=(w.exercises||[]).length;
+        const nSets=(w.exercises||[]).reduce((s,ex)=>s+((ex.sets||[]).length),0);
+        return `<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--bdr)">
+          <div>
+            <div style="font-weight:700;color:var(--wht)">${escHtml(w.title||'Session')}</div>
+            <div style="font-size:11px;color:var(--gry)">${escHtml(w.date)} · ${nEx} exercise${nEx===1?'':'s'} · ${nSets} sets</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  if(histSub){
+    const nW = (typeof myWorkouts==='function'?myWorkouts():[]).length;
+    histSub.textContent = (recent.length||nW)
+      ? (recent.length+' body log'+(recent.length===1?'':'s')+' · '+nW+' session'+(nW===1?'':'s'))
+      : 'No history yet';
+  }
 }
 
 // ═══════════════════════════════════════
 // ADMIN
 // ═══════════════════════════════════════
 // ── DEMO CHECK-IN SEEDER ──
-async function generateDemoCheckins(){
-  if(!CU || CU.role!=='admin'){toast('Admin only','r');return;}
-  const checkinsSnap = await fdb.collection('checkins').get();
-  const hasAnyData = !checkinsSnap.empty && checkinsSnap.docs.some(d=>{
-    const data=d.data();
-    return Array.isArray(data.entries) && data.entries.length>0;
-  });
-  if(hasAnyData){
-    if(!confirm('Some members already have check-in data. This will OVERWRITE it with demo data. Continue?'))return;
-  }
-  const users = Object.values(gDB().users || {}).filter(u => u.role!=='admin' && u.status==='approved');
-  if(!users.length){toast('No approved members to seed','a');return;}
-  const today = new Date();
-  let seeded = 0;
-  for(const u of users){
-    const email = u.email;
-    const userSnap = await fdb.collection('checkins').doc(email).get();
-    if(userSnap.exists && Array.isArray(userSnap.data().entries) && userSnap.data().entries.length>0){
-      continue;
-    }
-    const baseWeight = parseFloat(u.baseWeight)||200;
-    const baseWaist  = parseFloat(u.baseWaist)||40;
-    const entries = [];
-    for(let i=13;i>=0;i--){
-      const d = new Date(today); d.setDate(d.getDate()-i);
-      const dateStr = d.toISOString().split('T')[0];
-      const progress = (14-i)/14;
-      const weight = (baseWeight - (progress*4) + ((Math.random()*1.4)-0.7)).toFixed(1);
-      const waist  = (baseWaist  - (progress*1.2) + ((Math.random()*0.4)-0.2)).toFixed(1);
-      entries.push({
-        date:dateStr, weight:parseFloat(weight), waist:parseFloat(waist),
-        steps:Math.floor(6000+Math.random()*6000),
-        sleep:parseFloat((5.5+Math.random()*3).toFixed(1)),
-        hunger:Math.floor(1+Math.random()*4),
-        protein:Math.floor(60+Math.random()*40),
-        workout:Math.random()>0.4,
-        sleepQual:Math.floor(1+Math.random()*3),
-        water:Math.floor(4+Math.random()*7),
-        notes:i===13?'Starting the journey! 💪':i===7?'Great week! 🔥':''
-      });
-    }
-    await fdb.collection('checkins').doc(email).set({entries});
-    if(!CACHE.checkins) CACHE.checkins={};
-    CACHE.checkins[email]=entries;
-    seeded++;
-  }
-  toast(seeded?`Seeded check-ins for ${seeded} member(s)`:'All members already have data','g');
-  renderDash(); renderHistory();
-}
+
 
 
 function isAdminSectionOpen(key, defaultOpen){
@@ -5390,7 +5085,6 @@ function enableReminders(){
     } else {
       toast('Please allow notifications when the browser asks','a');
     }
-    try{ renderRemindPrompt(CU); }catch(e){}
     try{ renderDash(); }catch(e){}
   };
   try{
@@ -5473,23 +5167,6 @@ function openWhatsAppTo(phone, body){
 }
 
 
-function applyWeeklyTemplate(email, key){
-  const id = _weeklyMsgDomId(email);
-  const note = document.getElementById('wkNote-'+id);
-  const guar = document.getElementById('wkGuar-'+id);
-  if(!note) return;
-  const map = {
-    strong: 'Really proud of how consistent you have been. Keep it going.',
-    water: 'I want water to be non-negotiable for you this week.',
-    steps: 'Prioritise steps this week even on busy days.',
-    train: 'Do not skip sessions this week — train first, negotiate later.',
-    photos: 'Get your progress photos in this week so we can review properly.'
-  };
-  note.value = map[key] || '';
-  if(guar && key==='strong') guar.value = 'On track';
-  toast('Template applied — preview or send','g');
-  try{ previewWeeklyClientMessage(email); }catch(e){}
-}
 
 function _weeklyMsgDomId(email){
   return String(email||'').replace(/[^a-zA-Z0-9]/g,'_');
