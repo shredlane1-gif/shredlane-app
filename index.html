@@ -395,7 +395,11 @@ input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}
 .ex-name-in:focus{outline:none;border-color:var(--grn)}
 .ex-name-in::placeholder{color:var(--gry2);font-weight:400}
 .ex-del{background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:4px 6px;line-height:1;flex-shrink:0}
-.set-row{display:grid;grid-template-columns:24px 1fr 1fr 26px;gap:6px;align-items:center;margin-bottom:6px}
+.set-block{margin-bottom:10px}
+.set-row{display:grid;grid-template-columns:24px 1fr 1fr 40px;gap:6px;align-items:center;margin-bottom:4px}
+.set-note-in{width:100%;padding:8px 10px;background:var(--dark3);border:1px solid var(--bdr2);border-radius:8px;color:var(--txt);font-size:12px;font-family:'Barlow',sans-serif;box-sizing:border-box}
+.set-note-in:focus{outline:none;border-color:var(--grn)}
+.set-note-in::placeholder{color:var(--gry2)}
 .set-n{font-family:'DM Mono',monospace;font-size:11px;color:var(--gry);text-align:center}
 .set-in{width:100%;padding:8px 9px;background:var(--dark3);border:1.5px solid var(--bdr2);border-radius:7px;font-family:'DM Mono',monospace;font-size:13px;color:var(--wht);-webkit-appearance:none}
 .set-in:focus{outline:none;border-color:var(--grn)}
@@ -2324,7 +2328,8 @@ let wktBuilder={id:null,date:today(),title:'',exercises:[]};
 let pendingWorkoutPrefill=null;
 let wktLoggerOpen=false;
 
-function newExercise(){return{name:'',sets:[{reps:'',weight:'',done:false}]}}
+function newSet(copy){return{reps:(copy&&copy.reps!=null)?copy.reps:'',weight:(copy&&copy.weight!=null)?copy.weight:'',done:false,note:(copy&&copy.note)||''}}
+function newExercise(n){n=Math.max(1,parseInt(n,10)||1);const sets=[];for(let i=0;i<n;i++)sets.push(newSet());return{name:'',sets}}
 
 function showWorkoutLogger(show){
   const card=document.getElementById('wktLoggerCard');
@@ -2407,12 +2412,12 @@ function openQuickExerciseLog(){
     title:'On the go',
     programId:null,
     programDayId:null,
-    exercises:[newExercise()]
+    exercises:[newExercise(3)]
   };
   showWorkoutLogger(true);
   initWorkoutForm();
   const lbl=document.getElementById('wktLoggerLbl');
-  if(lbl) lbl.textContent='On the go · type the exercise, tick each set';
+  if(lbl) lbl.textContent='On the go · add sets · notes optional';
   const titleEl=document.getElementById('wktTitleIn');
   if(titleEl) titleEl.value='On the go';
   const card=document.getElementById('wktLoggerCard');
@@ -2496,13 +2501,17 @@ function renderExerciseBuilder(){
       <div class="set-hdr-row">
         <div></div><div class="set-hdr-lbl">Reps</div><div class="set-hdr-lbl">Weight (kg)</div><div class="set-hdr-lbl">Done</div>
       </div>
-      ${ex.sets.map((s,si)=>`
-        <div class="set-row${s.done?' done-set':''}">
-          <div class="set-n">${si+1}</div>
-          <input class="set-in" type="number" inputmode="numeric" placeholder="${s.hint?('target '+escAttr(s.hint)):'reps'}" value="${s.reps!==''&&s.reps!=null?s.reps:''}" oninput="updateSet(${ei},${si},'reps',this.value)" aria-label="Reps set ${si+1}">
-          <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
-          <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Saved — tap to undo':'Tap ✓ to save this set'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
+      ${(ex.sets||[]).map((s,si)=>`
+        <div class="set-block">
+          <div class="set-row${s.done?' done-set':''}">
+            <div class="set-n">${si+1}</div>
+            <input class="set-in" type="number" inputmode="numeric" placeholder="${s.hint?('target '+escAttr(s.hint)):'reps'}" value="${s.reps!==''&&s.reps!=null?s.reps:''}" oninput="updateSet(${ei},${si},'reps',this.value)" aria-label="Reps set ${si+1}">
+            <input class="set-in" type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="kg" value="${s.weight!==''&&s.weight!=null?s.weight:''}" oninput="updateSet(${ei},${si},'weight',this.value)" aria-label="Weight set ${si+1}">
+            <button type="button" class="set-done-btn${s.done?' on':''}" onclick="toggleSetDone(${ei},${si})" title="${s.done?'Saved — tap to undo':'Tap ✓ to save this set'}" aria-label="Mark set done">${s.done?'✓':'○'}</button>
+          </div>
+          <input class="set-note-in" type="text" placeholder="Note (e.g. 5 alone, 4 assisted)" value="${escAttr(s.note||'')}" oninput="updateSet(${ei},${si},'note',this.value)" aria-label="Note set ${si+1}">
         </div>`).join('')}
+      <button type="button" class="add-set-btn" onclick="addSet(${ei})">＋ Add set</button>
     </div>`;
   }).join('');
 }
@@ -2534,14 +2543,14 @@ function updateExName(ei,v){
   if(empty && v && v.trim().length>=3){
     const prev = lastPerformanceForExercise(v);
     if(prev && prev.length){
-      ex.sets = prev.map(s=>({reps:s.reps, weight:s.weight, done:false}));
+      ex.sets = prev.map(s=>({reps:s.reps, weight:s.weight, done:false, note:''}));
       try{ renderExerciseBuilder(); }catch(e){}
       toast('Pre-filled last session for '+v.trim(),'g');
     }
   }
 }
 function updateSet(ei,si,field,v){const ex=wktBuilder.exercises[ei];if(!ex||!ex.sets[si])return;ex.sets[si][field]=v;}
-function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;const last=ex.sets[ex.sets.length-1];ex.sets.push({reps:last?last.reps:'',weight:last?last.weight:'',done:false});renderExerciseBuilder();}
+function addSet(ei){const ex=wktBuilder.exercises[ei];if(!ex)return;if(!ex.sets)ex.sets=[];const last=ex.sets[ex.sets.length-1];ex.sets.push(newSet(last?{reps:last.reps,weight:last.weight,note:''}:null));renderExerciseBuilder();}
 function removeSet(ei,si){const ex=wktBuilder.exercises[ei];if(!ex)return;ex.sets.splice(si,1);if(!ex.sets.length)ex.sets.push({reps:'',weight:'',done:false});renderExerciseBuilder();}
 
 function toggleSetDone(ei, si){
@@ -2583,8 +2592,9 @@ async function saveWorkoutProgress(quiet){
     sets: (ex.sets||[]).map(s=>({
       reps: (s.reps===''||s.reps==null)?null:parseInt(s.reps,10),
       weight: (s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight)),
-      done: !!s.done
-    })).filter(s=> s.done || s.reps!=null || s.weight!=null || true) // keep structure while logging
+      done: !!s.done,
+      note: (s.note&&String(s.note).trim())?String(s.note).trim():null
+    })).filter(s=> s.done || s.reps!=null || s.weight!=null || s.note || true)
   })).filter(ex=>ex.name);
   if(!wktBuilder.id) wktBuilder.id = 'w'+Date.now();
   const entry = {id:wktBuilder.id, date:d, title, exercises, programId:wktBuilder.programId||null, programDayId:wktBuilder.programDayId||null, updatedAt: Date.now()};
@@ -2804,8 +2814,9 @@ async function saveWorkout(){
     sets:(ex.sets||[]).map(s=>({
       reps:(s.reps===''||s.reps==null)?null:parseInt(s.reps,10),
       weight:(s.weight===''||s.weight==null)?null:(isNaN(parseDec(s.weight))?null:parseDec(s.weight)),
-      done:!!s.done
-    })).filter(s=> s.done || s.reps!=null || s.weight!=null) // keep only sets with data or ticked done
+      done:!!s.done,
+      note:(s.note&&String(s.note).trim())?String(s.note).trim():null
+    })).filter(s=> s.done || s.reps!=null || s.weight!=null || s.note)
   })).filter(ex=> (ex.sets||[]).length>0 || (ex.name&&ex.name.indexOf('Exercise')!==0));
   // Assign id once so double-taps update the same entry instead of creating duplicates
   if(!wktBuilder.id) wktBuilder.id = 'w'+Date.now();
@@ -2882,7 +2893,7 @@ async function saveWorkout(){
 function editWorkout(id){
   const w=myWorkouts().find(x=>x.id===id);
   if(!w)return;
-  wktBuilder={id:w.id,date:w.date,title:w.title||'',programId:w.programId||null,programDayId:w.programDayId||null,exercises:w.exercises.map(ex=>({name:ex.name,sets:(ex.sets||[]).map(s=>({reps:s.reps??'',weight:s.weight??'',done:!!s.done}))}))};
+  wktBuilder={id:w.id,date:w.date,title:w.title||'',programId:w.programId||null,programDayId:w.programDayId||null,exercises:w.exercises.map(ex=>({name:ex.name,sets:(ex.sets||[]).map(s=>({reps:s.reps??'',weight:s.weight??'',done:!!s.done,note:s.note||''}))}))};
   showWorkoutLogger(true);
   document.getElementById('wktTitleIn').value=w.title||'';
   document.getElementById('wktDateIn').value=w.date;
@@ -3049,7 +3060,8 @@ function renderWorkoutHistoryByWeek(list){
         const setsStr=(ex.sets||[]).map(s=>{
           const r=s.reps!=null&&s.reps!==''?s.reps:'—';
           const wt=s.weight!=null&&s.weight!==''?s.weight+'kg':'BW';
-          return r+'×'+wt;
+          const note=(s.note&&String(s.note).trim())?(' ('+String(s.note).trim()+')'):'';
+          return r+'×'+wt+note;
         }).join(' · ');
         let delta='';
         const pb=prevMap[name.toLowerCase()];
@@ -3337,7 +3349,7 @@ function startWorkoutFromProgramDay(programId,dayId, opts){
     programDayId: dayId,
     exercises:(day.exercises||[]).map(ex=>({
       name:ex.name,
-      sets:Array.from({length:Math.max(1,parseInt(ex.targetSets)||3)},()=>({reps:'',weight:'',hint:ex.targetReps||'',done:false}))
+      sets:Array.from({length:Math.max(1,parseInt(ex.targetSets)||3)},()=>({reps:'',weight:'',hint:ex.targetReps||'',done:false,note:''}))
     }))
   };
   const onTrain = document.getElementById('scr-workouts') && document.getElementById('scr-workouts').classList.contains('active');
